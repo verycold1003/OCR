@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>發票辨識系統</title>
+<title>支出申請</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -197,20 +197,10 @@
   <div class="logo">
     <div class="logo-icon">🧾</div>
     <div>
-      <div class="logo-text">發票辨識系統</div>
-      <div class="logo-sub">Vision API + Claude · GAS Proxy</div>
+      <div class="logo-text">支出申請</div>
     </div>
   </div>
-  <div class="version">v2.0</div>
 </header>
-
-<!-- GAS URL -->
-<div class="gas-section">
-  <span class="gas-label">GAS URL</span>
-  <input type="text" class="gas-input" id="gasUrl" placeholder="https://script.google.com/macros/s/AKfycbzIf6tPlZa-Y3K4s4GtF-tQzspz2VA7qgmxOTiFHl104Z7f37v_QaDcrzGK_YVuCP8K/exec" />
-  <button class="gas-save" onclick="saveGasUrl()">儲存</button>
-  <span class="gas-status empty" id="gasStatus">未設定</span>
-</div>
 
 <div class="main">
 
@@ -252,7 +242,7 @@
           <input type="radio" name="invoiceType" value="employee" style="accent-color: var(--accent);" />
           <div class="radio-info">
             <div class="radio-title">員工請款</div>
-            <div class="radio-sub">個人費用墊付</div>
+            <div class="radio-sub">個人費用墊付、差旅核銷</div>
           </div>
         </label>
       </div>
@@ -282,11 +272,11 @@
       <div class="loading" id="loadingState">
         <div class="spinner"></div>
         <div class="loading-text">辨識中...</div>
-        <div class="loading-step" id="loadingStep">① 傳送圖片至 Vision API</div>
+        <div class="loading-step" id="loadingStep">① 傳送圖片至 Gemini</div>
       </div>
       <div class="error-msg" id="errorMsg"></div>
       <div id="resultContent" style="display:none;">
-        <span class="raw-toggle" onclick="toggleRaw()">▶ 顯示 Vision OCR 原始文字</span>
+        <span class="raw-toggle" onclick="toggleRaw()">▶ 顯示 Gemini OCR 原始文字</span>
         <div class="raw-text" id="rawText"></div>
         <div class="fields-grid" id="fieldsGrid"></div>
         <div class="items-section" id="itemsSection" style="display:none;">
@@ -315,22 +305,6 @@ let imageBase64 = null;
 let imageMime = null;
 let rawOcrText = null;
 let rawVisible = false;
-
-window.onload = () => {
-  const saved = localStorage.getItem('gas_url');
-  if (saved) { document.getElementById('gasUrl').value = saved; updateGasStatus(true); }
-};
-
-function saveGasUrl() {
-  const url = document.getElementById('gasUrl').value.trim();
-  if (url) { localStorage.setItem('gas_url', url); updateGasStatus(true); showToast('GAS URL 已儲存'); }
-}
-
-function updateGasStatus(ok) {
-  const el = document.getElementById('gasStatus');
-  el.textContent = ok ? '已設定 ✓' : '未設定';
-  el.className = 'gas-status ' + (ok ? 'ok' : 'empty');
-}
 
 function handleFile(event) {
   const file = event.target.files[0];
@@ -372,8 +346,7 @@ function resetResult() {
 }
 
 async function analyze() {
-  const gasUrl = localStorage.getItem('gas_url');
-  if (!gasUrl) { showError('請先設定 GAS URL'); return; }
+  const gasUrl = "https://script.google.com/macros/s/AKfycbzIf6tPlZa-Y3K4s4GtF-tQzspz2VA7qgmxOTiFHl104Z7f37v_QaDcrzGK_YVuCP8K/exec";
   if (!imageBase64) { showError('請先上傳發票圖片'); return; }
 
   const invoiceType = document.querySelector('input[name="invoiceType"]:checked').value;
@@ -389,7 +362,7 @@ async function analyze() {
   document.getElementById('btnText').textContent = '辨識中...';
 
   // Animate loading steps
-  const steps = ['① 傳送圖片至 Vision API', '② Vision OCR 辨識文字中', '③ Claude 解析結構化欄位'];
+  const steps = ['① 傳送圖片至 Gemini', '② Gemini 辨識文字中', '③ Gemini 解析結構化欄位'];
   let stepIdx = 0;
   const stepEl = document.getElementById('loadingStep');
   const stepInterval = setInterval(() => {
@@ -491,7 +464,7 @@ function toggleRaw() {
   const el = document.getElementById('rawText');
   const toggle = document.querySelector('.raw-toggle');
   el.style.display = rawVisible ? 'block' : 'none';
-  toggle.textContent = (rawVisible ? '▼' : '▶') + ' Vision OCR 原始文字';
+  toggle.textContent = (rawVisible ? '▼' : '▶') + ' Gemini OCR 原始文字';
 }
 
 function showError(msg) {
