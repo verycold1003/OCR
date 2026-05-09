@@ -22,6 +22,12 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Sora',sans-serif;font-size:16px;overflow:hidden;}
 
+/* ── 手機外框 ── */
+.phone-shell{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at center,#1a1f2e 0%,#0a0c12 100%);}
+.phone-frame{width:390px;height:844px;max-height:95vh;background:var(--bg);border-radius:44px;
+  box-shadow:0 0 0 10px #1a1f2e,0 0 0 12px #242936,0 40px 120px rgba(0,0,0,.8),inset 0 0 0 1px rgba(255,255,255,.06);
+  overflow:hidden;position:relative;display:flex;flex-direction:column;}
 .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:126px;height:34px;
   background:#0a0c12;border-radius:0 0 20px 20px;z-index:50;}
 .phone-inner{flex:1;overflow-y:auto;overflow-x:hidden;padding-top:34px;scrollbar-width:none;}
@@ -300,6 +306,7 @@ select.modal-input{cursor:pointer;-webkit-appearance:none;}
 </style>
 </head>
 <body>
+<div class="phone-shell">
   <div class="notch"></div>
   <div class="phone-inner">
     <!-- App Bar -->
@@ -612,6 +619,8 @@ select.modal-input{cursor:pointer;-webkit-appearance:none;}
     </div>
 
   </div><!-- phone-inner -->
+</div><!-- phone-frame -->
+</div><!-- phone-shell -->
 
 <!-- ══ Modal：辨識憑證 ══ -->
 <div class="modal-overlay" id="modal-receipt" onclick="closeModalIfOverlay(event)">
@@ -772,8 +781,14 @@ function toggleCheck(event, el, type) {
   card.classList.add(checks.length === 2 ? 'done' : checks.length === 1 ? 'partial' : 'pending');
 }
 
-function openModal(id) {
+function openModal(id, mode) {
   document.getElementById(id).classList.add('open');
+  if (id === 'modal-receipt' && mode === 'dept') {
+    document.getElementById('receipt-title').textContent = '🏢 歸屬專案部費用';
+    document.getElementById('receipt-project').value = document.getElementById('receipt-project').options[3]?.value || '';
+  } else if (id === 'modal-receipt') {
+    document.getElementById('receipt-title').textContent = '📷 上傳並辨識憑證';
+  }
 }
 function closeModal() { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open')); }
 function closeModalIfOverlay(e) { if (e.target.classList.contains('modal-overlay')) closeModal(); }
