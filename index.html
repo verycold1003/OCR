@@ -298,6 +298,7 @@ select.modal-input{cursor:pointer;-webkit-appearance:none;}
 </style>
 </head>
 <body>
+  <div class="notch"></div>
   <div class="phone-inner">
     <!-- App Bar -->
     <div class="app-bar">
@@ -567,16 +568,6 @@ select.modal-input{cursor:pointer;-webkit-appearance:none;}
           <div class="fee-btn-arrow">›</div>
         </div>
 
-        <!-- Google 里程 -->
-        <div class="fee-btn" onclick="openModal('modal-mileage')">
-          <div class="fee-btn-icon">🗺️</div>
-          <div class="fee-btn-info">
-            <div class="fee-btn-title">Google 里程申請</div>
-            <div class="fee-btn-sub">輸入起終點 → Google Maps 自動計算<br>距離 × 補助標準 = 申請金額</div>
-          </div>
-          <div class="fee-btn-arrow">›</div>
-        </div>
-
         <!-- 載具匯入 -->
         <div class="fee-btn" onclick="openModal('modal-carrier')">
           <div class="fee-btn-icon">📲</div>
@@ -593,18 +584,15 @@ select.modal-input{cursor:pointer;-webkit-appearance:none;}
       <div class="section-divider"></div>
       <div class="section-head">
         <span class="section-label dept">無法歸屬專案</span>
-        <span class="wf-badge">B-2 新增</span>
+        <span class="wf-badge"></span>
       </div>
-      <div style="padding:12px 14px;background:var(--card);border:1px solid var(--border2);border-radius:var(--r);font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:10px;">
-        費用無法對應到特定工程專案時，歸屬<br>
-        <strong style="color:var(--purple);">「專案部（部門成本）」</strong><br>
-        例如：總部油資、辦公室停車、非專案出差
-      </div>
-      <div class="fee-btn" onclick="openModal('modal-receipt','dept')" style="border-color:rgba(167,139,250,.3);">
-        <div class="fee-btn-icon">🏢</div>
+
+      <!-- Google 里程 -->
+      <div class="fee-btn" onclick="openModal('modal-mileage')">
+        <div class="fee-btn-icon">🗺️</div>
         <div class="fee-btn-info">
-          <div class="fee-btn-title">歸屬專案部 <span class="no-proj-badge">非專案費用</span></div>
-          <div class="fee-btn-sub">上傳憑證並指定為部門成本</div>
+          <div class="fee-btn-title">Google 里程申請</div>
+          <div class="fee-btn-sub">輸入起終點 → Google Maps 自動計算<br>距離 × 補助標準 = 申請金額</div>
         </div>
         <div class="fee-btn-arrow">›</div>
       </div>
@@ -782,14 +770,8 @@ function toggleCheck(event, el, type) {
   card.classList.add(checks.length === 2 ? 'done' : checks.length === 1 ? 'partial' : 'pending');
 }
 
-function openModal(id, mode) {
+function openModal(id) {
   document.getElementById(id).classList.add('open');
-  if (id === 'modal-receipt' && mode === 'dept') {
-    document.getElementById('receipt-title').textContent = '🏢 歸屬專案部費用';
-    document.getElementById('receipt-project').value = document.getElementById('receipt-project').options[3]?.value || '';
-  } else if (id === 'modal-receipt') {
-    document.getElementById('receipt-title').textContent = '📷 上傳並辨識憑證';
-  }
 }
 function closeModal() { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open')); }
 function closeModalIfOverlay(e) { if (e.target.classList.contains('modal-overlay')) closeModal(); }
