@@ -20,7 +20,10 @@
   --r:14px; --r-sm:8px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Sora',sans-serif;font-size:16px;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Sora',sans-serif;font-size:16px;overflow:hidden;}
+
+.phone-inner{flex:1;overflow-y:auto;overflow-x:hidden;padding-top:34px;scrollbar-width:none;}
+.phone-inner::-webkit-scrollbar{display:none;}
 
 /* ── 狀態列 ── */
 .status-bar{display:flex;align-items:center;justify-content:space-between;
@@ -295,330 +298,330 @@ select.modal-input{cursor:pointer;-webkit-appearance:none;}
 </style>
 </head>
 <body>
-<!-- App Bar -->
-<div class="app-bar">
-  <div class="app-bar-logo">🏗</div>
-  <div><div class="app-bar-title">專案管理</div></div>
-  <div class="user-avatar">洪</div>
-</div>
-
-<!-- ══════════════════════════════════════
-     A. 專案 Tab
-══════════════════════════════════════ -->
-<div class="screen active" id="screen-project">
-
-  <!-- 專案選擇器 -->
-  <div class="proj-selector" onclick="toggleDropdown()" id="projSelector">
-    <div class="proj-icon">🧊</div>
-    <div class="proj-info">
-      <div class="proj-name" id="projName">台北某工廠冷凍機組</div>
-      <div class="proj-meta" id="projMeta">2025-TPE-001 ‧ 進行中 ‧ 合約 $980,000</div>
+  <div class="phone-inner">
+    <!-- App Bar -->
+    <div class="app-bar">
+      <div class="app-bar-logo">🏗</div>
+      <div><div class="app-bar-title">專案管理</div>
+      <div class="user-avatar">洪</div>
     </div>
-    <div class="proj-arrow">▾</div>
-    <div class="proj-dropdown" id="projDropdown">
-      <div class="proj-option current" onclick="selectProject('台北某工廠冷凍機組','2025-TPE-001 ‧ 進行中 ‧ 合約 $980,000',490000,980000,3)">
-        <div class="proj-option-name">台北某工廠冷凍機組</div>
-        <div class="proj-option-meta">2025-TPE-001 ‧ 進行中</div>
-      </div>
-      <div class="proj-option" onclick="selectProject('新竹科技廠空調工程','2025-HSC-002 ‧ 進行中 ‧ 合約 $1,250,000',0,1250000,3)">
-        <div class="proj-option-name">新竹科技廠空調工程</div>
-        <div class="proj-option-meta">2025-HSC-002 ‧ 進行中</div>
-      </div>
-      <div class="proj-option" onclick="selectProject('桃園物流中心冷藏室','2025-TYN-003 ‧ 完工驗收 ‧ 合約 $650,000',650000,650000,2)">
-        <div class="proj-option-name">桃園物流中心冷藏室</div>
-        <div class="proj-option-meta">2025-TYN-003 ‧ 完工驗收</div>
-      </div>
-    </div>
-  </div>
 
-  <!-- ── A 業主端 ── -->
-  <div class="section-head">
-    <span class="section-label client">業主收款進度</span>
-    <span class="wf-badge">$490,000 / $980,000</span>
-  </div>
+    <!-- ══════════════════════════════════════
+         A. 專案 Tab
+    ══════════════════════════════════════ -->
+    <div class="screen active" id="screen-project">
 
-  <!-- A-2：預收款 banner -->
-  <div class="prepay-banner">
-    <div class="prepay-icon">⬇️</div>
-    <div class="prepay-text">
-      預收款 <span class="prepay-amt">$50,000</span> 已設定<br>
-      <span style="font-size:11px;">各期依比例扣抵 10%，共分 4 期攤還</span>
-    </div>
-  </div>
-
-  <!-- 收款期數（橫向滑動）-->
-  <div class="milestone-scroll">
-
-    <!-- 第 1/4 期：訂金 -->
-    <div class="milestone-card done">
-      <div class="ms-seq">第 1 / 4 期</div><!-- A-3 -->
-      <div class="ms-name">訂金</div>
-      <div class="ms-pct">10%</div>
-      <div class="ms-amount">$93,000</div>
-      <div class="ms-addon"> 10% $98,000</div>
-      <div class="ms-deduct">▼ 扣抵預收 $5,000</div><!-- A-2 -->
-      <div class="ms-checks">
-        <div class="ms-check checked" onclick="toggleCheck(event,this,'invoice')">
-          <div class="ms-check-icon">🧾</div>
-          <div class="ms-check-label">已開票</div>
-          <div class="ms-check-date">05/02</div><!-- A-4 -->
+      <!-- 專案選擇器 -->
+      <div class="proj-selector" onclick="toggleDropdown()" id="projSelector">
+        <div class="proj-icon">🧊</div>
+        <div class="proj-info">
+          <div class="proj-name" id="projName">台北某工廠冷凍機組</div>
+          <div class="proj-meta" id="projMeta">2025-TPE-001 ‧ 進行中 ‧ 合約 $980,000</div>
         </div>
-        <div class="ms-check checked" onclick="toggleCheck(event,this,'payment')">
-          <div class="ms-check-icon">💰</div>
-          <div class="ms-check-label">已收款</div>
-          <div class="ms-check-date">05/05</div><!-- A-4 -->
+        <div class="proj-arrow">▾</div>
+        <div class="proj-dropdown" id="projDropdown">
+          <div class="proj-option current" onclick="selectProject('台北某工廠冷凍機組','2025-TPE-001 ‧ 進行中 ‧ 合約 $980,000',490000,980000,3)">
+            <div class="proj-option-name">台北某工廠冷凍機組</div>
+            <div class="proj-option-meta">2025-TPE-001 ‧ 進行中</div>
+          </div>
+          <div class="proj-option" onclick="selectProject('新竹科技廠空調工程','2025-HSC-002 ‧ 進行中 ‧ 合約 $1,250,000',0,1250000,3)">
+            <div class="proj-option-name">新竹科技廠空調工程</div>
+            <div class="proj-option-meta">2025-HSC-002 ‧ 進行中</div>
+          </div>
+          <div class="proj-option" onclick="selectProject('桃園物流中心冷藏室','2025-TYN-003 ‧ 完工驗收 ‧ 合約 $650,000',650000,650000,2)">
+            <div class="proj-option-name">桃園物流中心冷藏室</div>
+            <div class="proj-option-meta">2025-TYN-003 ‧ 完工驗收</div>
+          </div>
         </div>
       </div>
-      <div class="ms-progress"><div class="ms-progress-bar" style="width:100%"></div></div>
-    </div>
 
-    <!-- 第 2/4 期：設備完成款 -->
-    <div class="milestone-card partial">
-      <div class="ms-seq">第 2 / 4 期</div>
-      <div class="ms-name">設備完成款</div>
-      <div class="ms-pct">40%</div>
-      <div class="ms-amount">$372,000</div>
-      <div class="ms-addon"> 40% $392,000</div>
-      <div class="ms-deduct">▼ 扣抵預收 $20,000</div>
-      <div class="ms-checks">
-        <div class="ms-check checked" onclick="toggleCheck(event,this,'invoice')">
-          <div class="ms-check-icon">🧾</div>
-          <div class="ms-check-label">已開票</div>
-          <div class="ms-check-date">05/15</div>
-        </div>
-        <div class="ms-check" onclick="toggleCheck(event,this,'payment')">
-          <div class="ms-check-icon">💰</div>
-          <div class="ms-check-label">待收款</div>
-          <div class="ms-check-date">—</div>
+      <!-- ── A 業主端 ── -->
+      <div class="section-head">
+        <span class="section-label client">業主收款進度</span>
+        <span class="wf-badge">上半</span>
+      </div>
+
+      <!-- A-2：預收款 banner -->
+      <div class="prepay-banner">
+        <div class="prepay-icon">⬇️</div>
+        <div class="prepay-text">
+          預收款 <span class="prepay-amt">$50,000</span> 已設定<br>
+          <span style="font-size:11px;">各期依比例扣抵 10%，共分 4 期攤還</span>
         </div>
       </div>
-      <div class="ms-progress"><div class="ms-progress-bar" style="width:50%"></div></div>
-    </div>
 
-    <!-- 第 3/4 期：安裝完成款 + 追加 -->
-    <div class="milestone-card pending">
-      <div class="ms-seq">第 3 / 4 期</div>
-      <div class="ms-name">安裝完成款</div>
-      <div class="ms-pct">30%</div>
-      <div class="ms-amount">$279,000</div>
-      <div class="ms-addon"> 30% $294,000</div>
-      <div class="ms-deduct">▼ 扣抵預收 $15,000</div>
-      <div class="ms-checks">
-        <div class="ms-check" onclick="toggleCheck(event,this,'invoice')">
-          <div class="ms-check-icon">🧾</div>
-          <div class="ms-check-label">待開票</div>
-          <div class="ms-check-date">—</div>
+      <!-- 收款期數（橫向滑動）-->
+      <div class="milestone-scroll">
+
+        <!-- 第 1/4 期：訂金 -->
+        <div class="milestone-card done">
+          <div class="ms-seq">第 1 / 4 期</div><!-- A-3 -->
+          <div class="ms-name">訂金</div>
+          <div class="ms-pct">10%</div>
+          <div class="ms-amount">$93,000</div>
+          <div class="ms-addon"> 10% $98,000</div>
+          <div class="ms-deduct">▼ 扣抵預收 $5,000</div><!-- A-2 -->
+          <div class="ms-checks">
+            <div class="ms-check checked" onclick="toggleCheck(event,this,'invoice')">
+              <div class="ms-check-icon">🧾</div>
+              <div class="ms-check-label">已開票</div>
+              <div class="ms-check-date">05/02</div><!-- A-4 -->
+            </div>
+            <div class="ms-check checked" onclick="toggleCheck(event,this,'payment')">
+              <div class="ms-check-icon">💰</div>
+              <div class="ms-check-label">已收款</div>
+              <div class="ms-check-date">05/05</div><!-- A-4 -->
+            </div>
+          </div>
+          <div class="ms-progress"><div class="ms-progress-bar" style="width:100%"></div></div>
         </div>
-        <div class="ms-check" onclick="toggleCheck(event,this,'payment')">
-          <div class="ms-check-icon">💰</div>
-          <div class="ms-check-label">待收款</div>
-          <div class="ms-check-date">—</div>
+
+        <!-- 第 2/4 期：設備完成款 -->
+        <div class="milestone-card partial">
+          <div class="ms-seq">第 2 / 4 期</div>
+          <div class="ms-name">設備完成款</div>
+          <div class="ms-pct">40%</div>
+          <div class="ms-amount">$372,000</div>
+          <div class="ms-addon"> 40% $392,000</div>
+          <div class="ms-deduct">▼ 扣抵預收 $5,000</div>
+          <div class="ms-checks">
+            <div class="ms-check checked" onclick="toggleCheck(event,this,'invoice')">
+              <div class="ms-check-icon">🧾</div>
+              <div class="ms-check-label">已開票</div>
+              <div class="ms-check-date">05/15</div>
+            </div>
+            <div class="ms-check" onclick="toggleCheck(event,this,'payment')">
+              <div class="ms-check-icon">💰</div>
+              <div class="ms-check-label">待收款</div>
+              <div class="ms-check-date">—</div>
+            </div>
+          </div>
+          <div class="ms-progress"><div class="ms-progress-bar" style="width:50%"></div></div>
+        </div>
+
+        <!-- 第 3/4 期：安裝完成款 + 追加 -->
+        <div class="milestone-card pending">
+          <div class="ms-seq">第 3 / 4 期</div>
+          <div class="ms-name">安裝完成款</div>
+          <div class="ms-pct">30%</div>
+          <div class="ms-amount">$279,000</div>
+          <div class="ms-addon"> 30% $294,000</div>
+          <div class="ms-deduct">▼ 扣抵預收 $5,000</div>
+          <div class="ms-checks">
+            <div class="ms-check" onclick="toggleCheck(event,this,'invoice')">
+              <div class="ms-check-icon">🧾</div>
+              <div class="ms-check-label">待開票</div>
+              <div class="ms-check-date">—</div>
+            </div>
+            <div class="ms-check" onclick="toggleCheck(event,this,'payment')">
+              <div class="ms-check-icon">💰</div>
+              <div class="ms-check-label">待收款</div>
+              <div class="ms-check-date">—</div>
+            </div>
+          </div>
+          <div class="ms-progress"><div class="ms-progress-bar" style="width:0%"></div></div>
+        </div>
+
+        <!-- 第 4/4 期：驗收尾款 -->
+        <div class="milestone-card pending">
+          <div class="ms-seq">第 4 / 4 期</div>
+          <div class="ms-name">驗收尾款</div>
+          <div class="ms-pct">20%</div>
+          <div class="ms-amount">$186,000</div>
+          <div class="ms-addon"> 20% $196,000</div>
+          <div class="ms-deduct">▼ 扣抵預收 $35,000</div>
+          <div class="ms-checks">
+            <div class="ms-check" onclick="toggleCheck(event,this,'invoice')">
+              <div class="ms-check-icon">🧾</div>
+              <div class="ms-check-label">待開票</div>
+              <div class="ms-check-date">—</div>
+            </div>
+            <div class="ms-check" onclick="toggleCheck(event,this,'payment')">
+              <div class="ms-check-icon">💰</div>
+              <div class="ms-check-label">待收款</div>
+              <div class="ms-check-date">—</div>
+            </div>
+          </div>
+          <div class="ms-progress"><div class="ms-progress-bar" style="width:0%"></div></div>
+        </div>
+
+      </div><!-- milestone-scroll -->
+
+      <div class="section-divider"></div>
+
+      <!-- ── 廠商端 ── -->
+      <div class="section-head">
+        <span class="section-label vendor">廠商請款進度</span>
+        <span class="wf-badge">$204,000 / $795,000 </span>
+      </div>
+
+      <div class="vendor-list">
+        <div class="vendor-card">
+          <div class="vendor-head">
+            <div class="vendor-avatar eq">⚙️</div>
+            <div><div class="vendor-name">冷凍設備有限公司</div><div class="vendor-type">設備供應廠商</div></div>
+            <div class="vendor-total">
+              <div class="vendor-total-amt">$480,000</div>
+              <div class="vendor-total-label">合約金額</div>
+            </div>
+          </div>
+          <div class="vendor-payments">
+            <!-- B-1：已完成加日期 -->
+            <div class="pay-chip paid"><div class="pay-dot"></div>預付款 30% $144,000 ✓<span class="pay-date">05/01</span></div>
+            <div class="pay-chip review"><div class="pay-dot"></div>交貨款 50% $240,000 審核中</div>
+            <div class="pay-chip pending"><div class="pay-dot"></div>尾款 20% $96,000 待請</div>
+          </div>
+        </div>
+        <div class="vendor-card">
+          <div class="vendor-head">
+            <div class="vendor-avatar work1">🔧</div>
+            <div><div class="vendor-name">精冷工程行</div><div class="vendor-type">冷凍管路施作</div></div>
+            <div class="vendor-total"><div class="vendor-total-amt">$220,000</div><div class="vendor-total-label">合約金額</div></div>
+          </div>
+          <div class="vendor-payments">
+            <div class="pay-chip paid"><div class="pay-dot"></div>進場款 $60,000 ✓<span class="pay-date">04/28</span></div>
+            <div class="pay-chip pending"><div class="pay-dot"></div>完成款 $160,000 待請</div>
+          </div>
+        </div>
+        <div class="vendor-card">
+          <div class="vendor-head">
+            <div class="vendor-avatar work2">⚡</div>
+            <div><div class="vendor-name">台電工程社</div><div class="vendor-type">電氣配線施作</div></div>
+            <div class="vendor-total"><div class="vendor-total-amt">$95,000</div><div class="vendor-total-label">合約金額</div></div>
+          </div>
+          <div class="vendor-payments">
+            <div class="pay-chip pending"><div class="pay-dot"></div>一次付清 $95,000 待請</div>
+          </div>
         </div>
       </div>
-      <div class="ms-progress"><div class="ms-progress-bar" style="width:0%"></div></div>
-    </div>
 
-    <!-- 第 4/4 期：驗收尾款 -->
-    <div class="milestone-card pending">
-      <div class="ms-seq">第 4 / 4 期</div>
-      <div class="ms-name">驗收尾款</div>
-      <div class="ms-pct">20%</div>
-      <div class="ms-amount">$186,000</div>
-      <div class="ms-addon"> 20% $196,000</div>
-      <div class="ms-deduct">▼ 扣抵預收 $10,000</div>
-      <div class="ms-checks">
-        <div class="ms-check" onclick="toggleCheck(event,this,'invoice')">
-          <div class="ms-check-icon">🧾</div>
-          <div class="ms-check-label">待開票</div>
-          <div class="ms-check-date">—</div>
+      <div class="section-divider"></div>
+
+      <!-- ── A-三：員工費用核銷（依上傳日期排序）── -->
+      <div class="section-head">
+        <span class="section-label expense">本專案費用核銷</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text3);">依上傳日期 ↓</span>
+      </div>
+
+      <div class="expense-log">
+        <!-- 依上傳日期排序 -->
+        <div class="expense-item">
+          <div class="expense-date">05/16</div>
+          <div class="expense-icon">⛽</div>
+          <div class="expense-desc">加油發票 — 中油<div class="expense-desc-sub">辨識：統編 03717009</div></div>
+          <div class="expense-amt">$1,200</div>
+          <div class="expense-status es-ok">核准</div>
         </div>
-        <div class="ms-check" onclick="toggleCheck(event,this,'payment')">
-          <div class="ms-check-icon">💰</div>
-          <div class="ms-check-label">待收款</div>
-          <div class="ms-check-date">—</div>
+        <div class="expense-item">
+          <div class="expense-date">05/14</div>
+          <div class="expense-icon">🛣️</div>
+          <div class="expense-desc">ETC 過路費<div class="expense-desc-sub">國道 1 號 台北→桃園</div></div>
+          <div class="expense-amt">$180</div>
+          <div class="expense-status es-auto">自動</div>
+        </div>
+        <div class="expense-item">
+          <div class="expense-date">05/12</div>
+          <div class="expense-icon">🅿️</div>
+          <div class="expense-desc">停車場收據<div class="expense-desc-sub">信義停車場</div></div>
+          <div class="expense-amt">$120</div>
+          <div class="expense-status es-ok">核准</div>
+        </div>
+        <div class="expense-item">
+          <div class="expense-date">05/10</div>
+          <div class="expense-icon">⛽</div>
+          <div class="expense-desc">加油發票 — 台塑<div class="expense-desc-sub">辨識：統編 27206484</div></div>
+          <div class="expense-amt">$960</div>
+          <div class="expense-status es-wait">待審</div>
+        </div>
+        <div class="expense-item">
+          <div class="expense-date">05/08</div>
+          <div class="expense-icon">🪙</div>
+          <div class="expense-desc">路邊停車扣繳<div class="expense-desc-sub">重慶北路 × 3 次</div></div>
+          <div class="expense-amt">$90</div>
+          <div class="expense-status es-auto">自動</div>
         </div>
       </div>
-      <div class="ms-progress"><div class="ms-progress-bar" style="width:0%"></div></div>
-    </div>
 
-  </div><!-- milestone-scroll -->
+    </div><!-- screen-project -->
 
-  <div class="section-divider"></div>
+    <!-- ══════════════════════════════════════
+         B. 費用 Tab（整合為 3 大功能）
+    ══════════════════════════════════════ -->
+    <div class="screen" id="screen-expense">
 
-  <!-- ── 廠商端 ── -->
-  <div class="section-head">
-    <span class="section-label vendor">廠商請款進度</span>
-    <span class="wf-badge">下半</span>
-  </div>
+      <div class="section-head" style="margin-bottom:12px;">
+        <span class="section-label expense">費用上傳</span>
+        <span class="wf-badge"></span>
+      </div>
 
-  <div class="vendor-list">
-    <div class="vendor-card">
-      <div class="vendor-head">
-        <div class="vendor-avatar eq">⚙️</div>
-        <div><div class="vendor-name">冷凍設備有限公司</div><div class="vendor-type">設備供應廠商</div></div>
-        <div class="vendor-total">
-          <div class="vendor-total-amt">$480,000</div>
-          <div class="vendor-total-label">合約金額</div>
+      <!-- B-1：三大功能 -->
+      <div class="fee-upload-btns">
+
+        <!-- 辨識憑證 -->
+        <div class="fee-btn primary" onclick="openModal('modal-receipt')">
+          <div class="fee-btn-icon">📷</div>
+          <div class="fee-btn-info">
+            <div class="fee-btn-title">辨識憑證</div>
+            <div class="fee-btn-sub">油單發票・電子發票・ETC 帳單<br>手開收據・其他憑證，AI 自動辨識</div>
+          </div>
+          <div class="fee-btn-arrow">›</div>
         </div>
+
+        <!-- Google 里程 -->
+        <div class="fee-btn" onclick="openModal('modal-mileage')">
+          <div class="fee-btn-icon">🗺️</div>
+          <div class="fee-btn-info">
+            <div class="fee-btn-title">Google 里程申請</div>
+            <div class="fee-btn-sub">輸入起終點 → Google Maps 自動計算<br>距離 × 補助標準 = 申請金額</div>
+          </div>
+          <div class="fee-btn-arrow">›</div>
+        </div>
+
+        <!-- 載具匯入 -->
+        <div class="fee-btn" onclick="openModal('modal-carrier')">
+          <div class="fee-btn-icon">📲</div>
+          <div class="fee-btn-info">
+            <div class="fee-btn-title">載具匯入</div>
+            <div class="fee-btn-sub">手機條碼・自然人憑證<br>月底自動抓取電子發票清單</div>
+          </div>
+          <div class="fee-btn-arrow">›</div>
+        </div>
+
       </div>
-      <div class="vendor-payments">
-        <!-- B-1：已完成加日期 -->
-        <div class="pay-chip paid"><div class="pay-dot"></div>預付款 30% ✓<span class="pay-date">05/01</span></div>
-        <div class="pay-chip review"><div class="pay-dot"></div>交貨款 50% 審核中</div>
-        <div class="pay-chip pending"><div class="pay-dot"></div>尾款 20% 待請</div>
+
+      <!-- B-2：無法歸類到專案 → 專案部 -->
+      <div class="section-divider"></div>
+      <div class="section-head">
+        <span class="section-label dept">無法歸屬專案</span>
+        <span class="wf-badge">B-2 新增</span>
+      </div>
+      <div style="padding:12px 14px;background:var(--card);border:1px solid var(--border2);border-radius:var(--r);font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:10px;">
+        費用無法對應到特定工程專案時，歸屬<br>
+        <strong style="color:var(--purple);">「專案部（部門成本）」</strong><br>
+        例如：總部油資、辦公室停車、非專案出差
+      </div>
+      <div class="fee-btn" onclick="openModal('modal-receipt','dept')" style="border-color:rgba(167,139,250,.3);">
+        <div class="fee-btn-icon">🏢</div>
+        <div class="fee-btn-info">
+          <div class="fee-btn-title">歸屬專案部 <span class="no-proj-badge">非專案費用</span></div>
+          <div class="fee-btn-sub">上傳憑證並指定為部門成本</div>
+        </div>
+        <div class="fee-btn-arrow">›</div>
+      </div>
+
+    </div><!-- screen-expense -->
+
+    <!-- Tab Bar（4 個 Tab）-->
+    <div class="tab-bar">
+      <div class="tab active" id="tab-project" onclick="showScreen('project')">
+        <div class="tab-icon">📊</div><div class="tab-label">專案</div>
+      </div>
+      <div class="tab" id="tab-expense" onclick="showScreen('expense')">
+        <div class="tab-icon">🧾</div><div class="tab-label">費用</div>
       </div>
     </div>
-    <div class="vendor-card">
-      <div class="vendor-head">
-        <div class="vendor-avatar work1">🔧</div>
-        <div><div class="vendor-name">精冷工程行</div><div class="vendor-type">冷凍管路施作</div></div>
-        <div class="vendor-total"><div class="vendor-total-amt">$220,000</div><div class="vendor-total-label">合約金額</div></div>
-      </div>
-      <div class="vendor-payments">
-        <div class="pay-chip paid"><div class="pay-dot"></div>進場款 $60,000 ✓<span class="pay-date">04/28</span></div>
-        <div class="pay-chip pending"><div class="pay-dot"></div>完成款 $160,000 待請</div>
-      </div>
-    </div>
-    <div class="vendor-card">
-      <div class="vendor-head">
-        <div class="vendor-avatar work2">⚡</div>
-        <div><div class="vendor-name">台電工程社</div><div class="vendor-type">電氣配線施作</div></div>
-        <div class="vendor-total"><div class="vendor-total-amt">$95,000</div><div class="vendor-total-label">合約金額</div></div>
-      </div>
-      <div class="vendor-payments">
-        <div class="pay-chip pending"><div class="pay-dot"></div>一次付清 $95,000 待請</div>
-      </div>
-    </div>
-  </div>
 
-  <div class="section-divider"></div>
-
-  <!-- ── A-三：員工費用核銷（依上傳日期排序）── -->
-  <div class="section-head">
-    <span class="section-label expense">本專案費用核銷</span>
-    <span style="margin-left:auto;font-size:11px;color:var(--text3);">依上傳日期 ↓</span>
-  </div>
-
-  <div class="expense-log">
-    <!-- 依上傳日期排序 -->
-    <div class="expense-item">
-      <div class="expense-date">05/16</div>
-      <div class="expense-icon">⛽</div>
-      <div class="expense-desc">加油發票 — 中油<div class="expense-desc-sub">辨識：統編 03717009</div></div>
-      <div class="expense-amt">$1,200</div>
-      <div class="expense-status es-ok">核准</div>
-    </div>
-    <div class="expense-item">
-      <div class="expense-date">05/14</div>
-      <div class="expense-icon">🛣️</div>
-      <div class="expense-desc">ETC 過路費<div class="expense-desc-sub">國道 1 號 台北→桃園</div></div>
-      <div class="expense-amt">$180</div>
-      <div class="expense-status es-auto">自動</div>
-    </div>
-    <div class="expense-item">
-      <div class="expense-date">05/12</div>
-      <div class="expense-icon">🅿️</div>
-      <div class="expense-desc">停車場收據<div class="expense-desc-sub">信義停車場</div></div>
-      <div class="expense-amt">$120</div>
-      <div class="expense-status es-ok">核准</div>
-    </div>
-    <div class="expense-item">
-      <div class="expense-date">05/10</div>
-      <div class="expense-icon">⛽</div>
-      <div class="expense-desc">加油發票 — 台塑<div class="expense-desc-sub">辨識：統編 27206484</div></div>
-      <div class="expense-amt">$960</div>
-      <div class="expense-status es-wait">待審</div>
-    </div>
-    <div class="expense-item">
-      <div class="expense-date">05/08</div>
-      <div class="expense-icon">🪙</div>
-      <div class="expense-desc">路邊停車扣繳<div class="expense-desc-sub">重慶北路 × 3 次</div></div>
-      <div class="expense-amt">$90</div>
-      <div class="expense-status es-auto">自動</div>
-    </div>
-  </div>
-
-</div><!-- screen-project -->
-
-<!-- ══════════════════════════════════════
-     B. 費用 Tab（整合為 3 大功能）
-══════════════════════════════════════ -->
-<div class="screen" id="screen-expense">
-
-  <div class="section-head" style="margin-bottom:12px;">
-    <span class="section-label expense">費用上傳</span>
-    <span class="wf-badge">B 整合版</span>
-  </div>
-
-  <!-- B-1：三大功能 -->
-  <div class="fee-upload-btns">
-
-    <!-- 辨識憑證 -->
-    <div class="fee-btn primary" onclick="openModal('modal-receipt')">
-      <div class="fee-btn-icon">📷</div>
-      <div class="fee-btn-info">
-        <div class="fee-btn-title">辨識憑證</div>
-        <div class="fee-btn-sub">油單發票・電子發票・ETC 帳單<br>手開收據・其他憑證，AI 自動辨識</div>
-      </div>
-      <div class="fee-btn-arrow">›</div>
-    </div>
-
-    <!-- Google 里程 -->
-    <div class="fee-btn" onclick="openModal('modal-mileage')">
-      <div class="fee-btn-icon">🗺️</div>
-      <div class="fee-btn-info">
-        <div class="fee-btn-title">Google 里程申請</div>
-        <div class="fee-btn-sub">輸入起終點 → Google Maps 自動計算<br>距離 × 補助標準 = 申請金額</div>
-      </div>
-      <div class="fee-btn-arrow">›</div>
-    </div>
-
-    <!-- 載具匯入 -->
-    <div class="fee-btn" onclick="openModal('modal-carrier')">
-      <div class="fee-btn-icon">📲</div>
-      <div class="fee-btn-info">
-        <div class="fee-btn-title">載具匯入</div>
-        <div class="fee-btn-sub">手機條碼・自然人憑證<br>月底自動抓取電子發票清單</div>
-      </div>
-      <div class="fee-btn-arrow">›</div>
-    </div>
-
-  </div>
-
-  <!-- B-2：無法歸類到專案 → 專案部 -->
-  <div class="section-divider"></div>
-  <div class="section-head">
-    <span class="section-label dept">無法歸屬專案</span>
-    <span class="wf-badge">B-2 新增</span>
-  </div>
-  <div style="padding:12px 14px;background:var(--card);border:1px solid var(--border2);border-radius:var(--r);font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:10px;">
-    費用無法對應到特定工程專案時，歸屬<br>
-    <strong style="color:var(--purple);">「專案部（部門成本）」</strong><br>
-    例如：總部油資、辦公室停車、非專案出差
-  </div>
-  <div class="fee-btn" onclick="openModal('modal-receipt','dept')" style="border-color:rgba(167,139,250,.3);">
-    <div class="fee-btn-icon">🏢</div>
-    <div class="fee-btn-info">
-      <div class="fee-btn-title">歸屬專案部 <span class="no-proj-badge">非專案費用</span></div>
-      <div class="fee-btn-sub">上傳憑證並指定為部門成本</div>
-    </div>
-    <div class="fee-btn-arrow">›</div>
-  </div>
-
-</div><!-- screen-expense -->
-
-<!-- Tab Bar（4 個 Tab）-->
-<div class="tab-bar">
-  <div class="tab active" id="tab-project" onclick="showScreen('project')">
-    <div class="tab-icon">📊</div><div class="tab-label">專案</div>
-  </div>
-  <div class="tab" id="tab-expense" onclick="showScreen('expense')">
-    <div class="tab-icon">🧾</div><div class="tab-label">費用</div>
-  </div>
-  <div class="tab">
-    <div class="tab-icon">📈</div><div class="tab-label">報表</div>
-  </div>
-</div>
+  </div><!-- phone-inner -->
 
 <!-- ══ Modal：辨識憑證 ══ -->
 <div class="modal-overlay" id="modal-receipt" onclick="closeModalIfOverlay(event)">
