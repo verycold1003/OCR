@@ -186,8 +186,21 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
 
 /* Responsive */
 @media(max-width:900px){
-  .shell{grid-template-columns:1fr;grid-template-rows:56px 44px 1fr}
+  .shell{grid-template-columns:1fr;grid-template-rows:56px 1fr}
   .sidebar{display:none}
+  .login-box{width:min(400px,92vw);padding:28px 20px}
+  .topbar{padding:0 14px;gap:10px}
+  .topbar .logo{font-size:15px}
+  #tbUser > div:last-child > #uDeptTitle{display:none}
+  .main-area{padding:14px}
+  /* Upload page: stack columns on mobile */
+  #page-upload > div[style*="grid-template-columns:1fr 340px"],
+  #page-ocr > div[style*="grid-template-columns:1fr 280px"],
+  #page-export > div[style*="grid-template-columns:1fr 280px"]{
+    display:flex!important;flex-direction:column!important;gap:14px!important;
+  }
+  .fg2,.fg3,.fg4{grid-template-columns:1fr 1fr!important}
+  .rc-hd{grid-template-columns:24px 44px 1fr auto 16px!important;gap:8px}
 }
 </style>
 </head>
@@ -213,11 +226,18 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
     <div id="loginCallbackMsg" style="display:none;margin-top:16px;font-size:13px;color:var(--green)">✅ 驗證中，請稍候...</div>
 
     <div id="bindNameSection" style="display:none;margin-top:20px">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">
-        找不到您的 LINE ID，請輸入姓名以完成綁定
+    <div id="bindNameSection" style="display:none;margin-top:20px;text-align:left">
+      <div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.2);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px;text-transform:uppercase;letter-spacing:.6px">🔗 首次綁定</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6">
+          此 LINE 帳號尚未綁定系統員工資料。<br>請輸入您的<strong style="color:var(--text)">中文姓名</strong>，系統將自動比對並完成綁定。
+        </div>
       </div>
-      <input id="bindNameInput" class="inp" placeholder="請輸入您的中文姓名" style="margin-bottom:10px">
-      <button class="btn btn-primary btn-full" onclick="doBindName()">確認綁定</button>
+      <div id="bindLineName" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+      <label class="lbl" style="display:block;margin-bottom:5px">您的中文姓名</label>
+      <input id="bindNameInput" class="inp" placeholder="例：張家榮" style="margin-bottom:12px" onkeydown="if(event.key==='Enter')doBindName()">
+      <button class="btn btn-primary btn-full" id="btnBindName" onclick="doBindName()">🔗 比對並綁定帳號</button>
+      <div id="bindNameErr" style="display:none;margin-top:8px;font-size:12px;color:var(--red)"></div>
     </div>
 
   </div>
@@ -466,7 +486,7 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
 // CONFIG
 // ════════════════════════════════════════════════════════════
 const CFG = {
-  GAS_URL:      'https://script.google.com/macros/s/AKfycbzIf6tPlZa-Y3K4s4GtF-tQzspz2VA7qgmxOTiFHl104Z7f37v_QaDcrzGK_YVuCP8K/exec'
+  GAS_URL:      'https://script.google.com/macros/s/AKfycbymHNgu59RcnyT_KMQrH-wAoxisk7CT4BRv1U0PQPQpjSu7WuJGBt6DxjOkcaI81fyt/exec'
 };
 
 // ════════════════════════════════════════════════════════════
@@ -612,18 +632,32 @@ function finishLogin(person) {
 function showBindNameUI() {
   document.getElementById('loginCallbackMsg').style.display = 'none';
   document.getElementById('bindNameSection').style.display = 'block';
+  const b = S._pendingBind;
+  if (b && b.lineName) {
+    const el = document.getElementById('bindLineName');
+    if (el) el.textContent = 'LINE 顯示名稱：' + b.lineName;
+  }
+  document.getElementById('bindNameInput').focus();
 }
 
 async function doBindName() {
   const name = document.getElementById('bindNameInput').value.trim();
-  if (!name) { toast('⚠️ 請輸入姓名'); return; }
+  const errEl = document.getElementById('bindNameErr');
+  errEl.style.display = 'none';
+  if (!name) { errEl.textContent = '⚠️ 請輸入姓名'; errEl.style.display = 'block'; return; }
+  const btn = document.getElementById('btnBindName');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spin"></div> 比對中...';
   const b = S._pendingBind;
   const res = await callGAS({ action: 'bindName', name, ...b });
+  btn.disabled = false;
+  btn.innerHTML = '🔗 比對並綁定帳號';
   if (res.success) {
     S._pendingBind = null;
     finishLogin(res.person);
   } else {
-    toast('❌ ' + res.error);
+    errEl.textContent = '❌ ' + (res.error || '比對失敗，請確認姓名是否正確');
+    errEl.style.display = 'block';
   }
 }
 function renderUserBar() {
