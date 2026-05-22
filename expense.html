@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>雜支申請</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0f1117; --surface:#181c27; --surface2:#1e2333;
+  --border:#2a3045; --border2:#343d58;
+  --text:#e8ecf4; --muted:#6b7699;
+  --accent:#4f8ef7; --accent2:#7c5cfc;
+  --gold:#f5a623; --green:#34d399; --red:#f87171; --amber:#fbbf24;
+  --parking:#fb923c;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Noto Sans TC',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+.mono{font-family:'IBM Plex Mono',monospace}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* Layout */
+.shell{display:grid;grid-template-columns:220px 1fr;grid-template-rows:56px 1fr;height:100vh;overflow:hidden}
+.topbar{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:16px;z-index:50}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;display:flex;flex-direction:column}
+.main-area{overflow-y:auto;padding:24px;background:var(--bg)}
+
+/* Logo */
+.logo{font-family:'Playfair Display',serif;font-size:18px;color:var(--accent);letter-spacing:1px;flex-shrink:0}
+.logo span{color:var(--gold)}
+
+/* Nav */
+.nav-sec{padding:8px 16px 4px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-top:8px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:13px;color:var(--muted);cursor:pointer;border-left:3px solid transparent;transition:all .15s}
+.nav-item:hover{color:var(--text);background:rgba(79,142,247,.06)}
+.nav-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(79,142,247,.1);font-weight:600}
+.nbadge{margin-left:auto;background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:99px;font-family:'IBM Plex Mono',monospace}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.card-hd{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700}
+.card-bd{padding:18px}
+
+/* Forms */
+.lbl{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+.inp{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:7px;padding:8px 12px;color:var(--text);font-size:13px;font-family:'Noto Sans TC',sans-serif;outline:none;transition:border-color .2s}
+.inp:focus{border-color:var(--accent)}
+.inp:disabled{opacity:.5;cursor:not-allowed}
+select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%236b7699' d='M5 7L0 2h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;-webkit-appearance:none;padding-right:28px}
+.frow{margin-bottom:12px}
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.fg4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:'Noto Sans TC',sans-serif;transition:all .15s;white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-primary{background:var(--accent);color:white}.btn-primary:hover:not(:disabled){background:#6ba0f9}
+.btn-ghost{background:rgba(255,255,255,.06);color:var(--text)}.btn-ghost:hover{background:rgba(255,255,255,.1)}
+.btn-outline{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.btn-danger{background:rgba(248,113,113,.15);color:var(--red)}
+.btn-green{background:rgba(52,211,153,.15);color:var(--green)}
+.btn-gold{background:rgba(245,166,35,.15);color:var(--gold)}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px}
+.btn-icon{padding:7px;border-radius:7px}
+.btn-full{width:100%}
+
+/* Toggles */
+.tgl{display:flex;background:var(--bg);border:1px solid var(--border2);border-radius:8px;overflow:hidden}
+.tgl-btn{flex:1;padding:7px 4px;font-size:12px;font-weight:600;text-align:center;cursor:pointer;color:var(--muted);background:transparent;border:none;transition:all .15s;font-family:'Noto Sans TC',sans-serif}
+.tgl-btn.on{background:var(--accent);color:white}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}
+.bd-blue{background:rgba(79,142,247,.15);color:var(--accent)}
+.bd-green{background:rgba(52,211,153,.15);color:var(--green)}
+.bd-red{background:rgba(248,113,113,.15);color:var(--red)}
+.bd-amber{background:rgba(251,191,36,.15);color:var(--amber)}
+.bd-orange{background:rgba(251,146,60,.15);color:var(--parking)}
+.bd-purple{background:rgba(124,92,252,.15);color:var(--accent2)}
+.bd-muted{background:rgba(107,118,153,.15);color:var(--muted)}
+
+/* Table */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{padding:10px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border)}
+.tbl td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+
+/* Pages */
+.page{display:none}
+.page.active{display:block}
+.pg-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;margin-bottom:4px}
+.pg-sub{font-size:12px;color:var(--muted);margin-bottom:20px}
+
+/* Drop zone */
+.dz{border:2px dashed var(--border2);border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(79,142,247,.02)}
+.dz:hover,.dz.over{border-color:var(--accent);background:rgba(79,142,247,.06)}
+
+/* Progress */
+.prog{background:var(--border);border-radius:99px;height:6px;overflow:hidden}
+.prog-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .35s ease}
+
+/* Spinner */
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.2);border-top-color:white;border-radius:50%;animation:rot .7s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* Receipt card */
+.rc{border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .2s;margin-bottom:10px}
+.rc:hover{border-color:var(--border2)}
+.rc.sel{border-color:var(--accent)}
+.rc-hd{display:grid;grid-template-columns:28px 52px 1fr auto auto 16px;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;user-select:none}
+.rc-thumb{width:50px;height:50px;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;flex-shrink:0}
+.rc-thumb img{width:100%;height:100%;object-fit:cover}
+.rc-body{padding:16px;background:var(--surface2);border-top:1px solid var(--border);display:none}
+.rc-body.open{display:block}
+
+/* Export section */
+.exp-sec{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.exp-sec-hd{padding:12px 16px;background:var(--surface2);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.exp-sec-bd{padding:16px;display:none}
+.exp-sec-bd.open{display:block}
+
+/* Attachment form */
+.att-form{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:10px}
+.att-title{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
+
+/* Calc box */
+.calc-box{background:rgba(79,142,247,.07);border:1px solid rgba(79,142,247,.18);border-radius:8px;padding:12px;margin-top:10px}
+.calc-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0}
+.calc-tot{font-size:15px;font-weight:700;color:var(--gold);border-top:1px solid var(--border2);padding-top:8px;margin-top:6px}
+
+/* Sum row */
+.sum-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px}
+.sum-row:last-child{border-bottom:none}
+.sum-amt{font-size:16px;font-weight:700;color:var(--gold)}
+
+/* Steps */
+.steps{display:flex;margin-bottom:20px}
+.step{flex:1;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--muted);position:relative}
+.step:not(:last-child)::after{content:'';position:absolute;top:12px;left:calc(100% - 18px);width:calc(100% - 18px);height:1px;background:var(--border2);z-index:0}
+.step-n{width:24px;height:24px;border-radius:50%;background:var(--border2);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;z-index:1}
+.step.done .step-n{background:var(--green);color:white}
+.step.active .step-n{background:var(--accent);color:white}
+.step.active{color:var(--text)}
+
+/* File item */
+.file-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--surface2)}
+.file-thumb{width:44px;height:44px;border-radius:6px;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden}
+.file-thumb img{width:100%;height:100%;object-fit:cover}
+
+/* Checkbox */
+.chkbox{width:18px;height:18px;border:2px solid var(--border2);border-radius:4px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;cursor:pointer}
+.chkbox.on{background:var(--accent);border-color:var(--accent)}
+.chkbox.on::after{content:'✓';color:white;font-size:11px;font-weight:700}
+
+/* Maps chip */
+.maps-link{display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-size:11px;text-decoration:none;padding:3px 8px;border-radius:5px;background:rgba(79,142,247,.1)}
+.maps-link:hover{background:rgba(79,142,247,.2)}
+.km-result{display:inline-flex;align-items:center;gap:6px;background:rgba(52,211,153,.1);color:var(--green);padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;margin-top:6px}
+
+/* Toast */
+.toast{position:fixed;top:68px;right:20px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;opacity:0;transform:translateX(20px);transition:all .3s;pointer-events:none;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.toast.show{opacity:1;transform:translateX(0)}
+
+/* Login */
+.login-wrap{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:200;flex-direction:column}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px;width:400px;text-align:center}
+.line-btn{display:flex;align-items:center;justify-content:center;gap:10px;background:#06C755;color:white;border:none;border-radius:10px;padding:14px 24px;font-size:15px;font-weight:700;cursor:pointer;width:100%;font-family:'Noto Sans TC',sans-serif;transition:background .2s}
+.line-btn:hover{background:#05a847}
+
+/* Modal */
+.modal-wrap{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;align-items:center;justify-content:center}
+.modal-wrap.open{display:flex}
+.modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:28px;width:min(660px,96vw);max-height:90vh;overflow-y:auto;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+
+/* Info panel */
+.info-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.info-row:last-child{border-bottom:none}
+
+/* Responsive */
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr;grid-template-rows:56px 44px 1fr}
+  .sidebar{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════════════════════════════════════════════
+     LOGIN
+════════════════════════════════════════════════════ -->
+<div class="login-wrap" id="loginWrap">
+  <div class="login-box">
+    <div style="font-size:52px;margin-bottom:14px">📋</div>
+    <div style="font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:var(--accent);margin-bottom:6px">雜支申請</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:28px">Expense Management Platform v2</div>
+
+    <!-- LINE Login button — triggers real OAuth redirect -->
+    <button class="line-btn" id="btnLineLogin" onclick="startLineLogin()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M19.365 9.89c.5 0 .907.41.907.91 0 .5-.407.91-.907.91h-2.44v1.55h2.44c.5 0 .907.41.907.91 0 .5-.407.91-.907.91H16.02a.91.91 0 01-.907-.91V9.89c0-.5.406-.91.907-.91zm-10.8 0c.5 0 .906.41.906.91v3.37h2.44c.5 0 .907.41.907.91 0 .5-.406.91-.907.91H8.565a.91.91 0 01-.907-.91V10.8c0-.5.407-.91.907-.91zm5.4 0c.5 0 .906.41.906.91v4.28c0 .5-.406.91-.906.91-.5 0-.907-.41-.907-.91V10.8c0-.5.407-.91.907-.91zm-8.14 0c.5 0 .906.41.906.91v2.44l1.89-2.96c.17-.26.46-.39.74-.35.5.07.84.5.84 1.01v4.28c0 .5-.407.91-.907.91-.5 0-.907-.41-.907-.91v-2.44l-1.89 2.96c-.17.26-.46.4-.74.35-.5-.07-.84-.5-.84-1.01V10.8c0-.5.407-.91.907-.91zM12 2C6.477 2 2 6.155 2 11.267c0 4.537 3.563 8.327 8.379 9.093.325.056.77.172.882.396.1.2.066.515.033.718l-.143.86c-.044.254-.202 1.003.878.547 1.08-.456 5.83-3.435 7.95-5.88C21.438 15.062 22 13.235 22 11.267 22 6.155 17.523 2 12 2z"/></svg>
+      使用 LINE 帳號登入
+    </button>
+
+    <div id="loginCallbackMsg" style="display:none;margin-top:16px;font-size:13px;color:var(--green)">✅ 驗證中，請稍候...</div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     APP SHELL
+════════════════════════════════════════════════════ -->
+<div class="shell" id="appShell" style="display:none">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo">雜支<span>申請</span></div>
+    <div style="height:18px;width:1px;background:var(--border)"></div>
+    <div style="font-size:12px;color:var(--muted)">Expense Management Platform</div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:14px">
+      <div id="tbUser" style="display:flex;align-items:center;gap:8px">
+        <div id="uAvatar" style="width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;overflow:hidden"></div>
+        <div>
+          <div id="uName" style="font-size:13px;font-weight:600">—</div>
+          <div id="uDeptTitle" style="font-size:11px;color:var(--muted)">—</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">登出</button>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="nav-sec">作業流程</div>
+    <div class="nav-item active" data-page="upload" onclick="nav('upload')">📤 <span>上傳憑證</span> <span class="nbadge" id="nb-upload" style="display:none">0</span></div>
+    <div class="nav-item" data-page="ocr" onclick="nav('ocr')">🤖 <span>OCR 辨識</span> <span class="nbadge" id="nb-ocr" style="display:none">0</span></div>
+    <div class="nav-item" data-page="export" onclick="nav('export')">📄 <span>整理匯出</span></div>
+    <div style="margin-top:auto;padding:16px;font-size:10px;color:var(--muted);line-height:1.8">
+      <div id="syncStatus">尚未同步</div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main-area" id="mainArea">
+
+    <!-- ─── PAGE: UPLOAD ─── -->
+    <div class="page active" id="page-upload">
+      <div class="pg-title">📤 上傳憑證</div>
+      <div class="pg-sub">批次上傳照片至 Google Drive；每張照片可包含多張電子發票</div>
+
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start">
+
+        <div>
+          <!-- Drop zone -->
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-hd">📁 選擇檔案</div>
+            <div class="card-bd">
+              <input type="file" id="fileInput" multiple accept="image/*,application/pdf" style="display:none" onchange="onFilePick(this.files)">
+              <div class="dz" id="dz" onclick="document.getElementById('fileInput').click()">
+                <div style="font-size:38px;margin-bottom:10px">🖼️</div>
+                <div style="font-size:15px;font-weight:700">點擊或拖曳照片 / PDF</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:6px">每張照片可包含多張發票或油單<br>支援 JPG · PNG · PDF</div>
+              </div>
+              <div id="fileList" style="margin-top:12px"></div>
+            </div>
+          </div>
+
+          <!-- Upload progress -->
+          <div class="card" id="upProgCard" style="display:none;margin-bottom:16px">
+            <div class="card-bd">
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:13px;font-weight:600">☁️ 上傳至 Google Drive</span>
+                <span class="mono" style="font-size:12px;color:var(--muted)" id="upProgTxt">0/0</span>
+              </div>
+              <div class="prog"><div class="prog-fill" id="upProgBar" style="width:0%"></div></div>
+              <div id="upProgFile" style="font-size:11px;color:var(--muted);margin-top:6px">—</div>
+            </div>
+          </div>
+
+          <!-- Uploaded list -->
+          <div class="card" id="uploadedCard" style="display:none">
+            <div class="card-hd">
+              ✅ 已上傳至雲端
+              <span class="badge bd-green" id="uploadedCnt">0 個</span>
+              <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="nav('ocr')">前往辨識 →</button>
+            </div>
+            <div class="card-bd" style="padding:0">
+              <table class="tbl">
+                <thead><tr><th>檔名</th><th>大小</th><th>時間</th><th>Drive</th><th></th></tr></thead>
+                <tbody id="uploadedTbl"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right panel -->
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-hd">⚙️ 上傳設定</div>
+            <div class="card-bd">
+              <div class="frow"><label class="lbl">申請月份</label><input type="month" class="inp" id="up-month"></div>
+              <div class="frow"><label class="lbl">申請人</label>
+                <select class="inp" id="up-person"><option value="">— 請選擇 —</option></select>
+              </div>
+              <button class="btn btn-primary btn-full" id="btnUpload" onclick="doUpload()" disabled>☁️ 上傳至 Drive</button>
+            </div>
+          </div>
+
+          <!-- Drive file records -->
+          <div class="card">
+            <div class="card-hd">
+              📋 雲端憑證紀錄
+              <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadDriveFiles()">🔄</button>
+            </div>
+            <div style="max-height:280px;overflow-y:auto">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th><div class="chkbox" id="chkAll" onclick="toggleAllDrive()"></div></th>
+                    <th>檔名</th><th>日期</th>
+                  </tr>
+                </thead>
+                <tbody id="driveFileTbl"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px">載入中...</td></tr></tbody>
+              </table>
+            </div>
+            <div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px">
+              <button class="btn btn-primary btn-sm" id="btnSendOCR" onclick="sendToOCR()" disabled>辨識勾選項目 →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: OCR ─── -->
+    <div class="page" id="page-ocr">
+      <div class="pg-title">🤖 OCR 辨識</div>
+      <div class="pg-sub">Gemini AI 逐一辨識每張照片，每張可辨識出多張發票。完成後可調整歸屬專案與費用類別</div>
+
+      <div class="steps">
+        <div class="step active" id="st1"><div class="step-n">1</div><span>加入佇列</span></div>
+        <div class="step" id="st2"><div class="step-n">2</div><span>AI 辨識</span></div>
+        <div class="step" id="st3"><div class="step-n">3</div><span>確認結果</span></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 280px;gap:18px;align-items:start">
+        <div>
+          <!-- Queue -->
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-hd">
+              📥 辨識佇列
+              <span class="badge bd-blue" id="queueCnt">0 個</span>
+              <div style="margin-left:auto;display:flex;gap:8px">
+                <button class="btn btn-ghost btn-sm" onclick="clearQueue()">清空</button>
+                <button class="btn btn-primary btn-sm" id="btnOCR" onclick="runOCR()" disabled>▶ 開始辨識</button>
+              </div>
+            </div>
+            <div class="card-bd" id="queueList">
+              <div style="text-align:center;color:var(--muted);padding:20px;font-size:13px">從上傳頁面勾選雲端檔案，或直接拖曳照片到此</div>
+            </div>
+          </div>
+
+          <!-- Progress -->
+          <div class="card" id="ocrProgCard" style="display:none;margin-bottom:16px">
+            <div class="card-bd">
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                <span style="font-size:13px;font-weight:600">🤖 Gemini 辨識中...</span>
+                <span class="mono" style="font-size:12px;color:var(--muted)" id="ocrProgTxt">0/0</span>
+              </div>
+              <div class="prog"><div class="prog-fill" id="ocrProgBar" style="width:0%"></div></div>
+              <div id="ocrProgFile" style="font-size:11px;color:var(--muted);margin-top:6px">—</div>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div id="ocrResults"></div>
+          <div id="ocrDoneBar" style="display:none;margin-top:12px">
+            <button class="btn btn-primary" onclick="nav('export')">📄 前往整理匯出 →</button>
+          </div>
+        </div>
+
+        <!-- Right: stats -->
+        <div class="card">
+          <div class="card-hd">📊 辨識統計</div>
+          <div class="card-bd" style="padding:0">
+            <div class="sum-row"><span>已辨識張數</span><span class="mono" id="s-count">0</span></div>
+            <div class="sum-row"><span>🅿️ 停車費</span><span class="mono" id="s-park">$0</span></div>
+            <div class="sum-row"><span>📄 其他費用</span><span class="mono" id="s-other">$0</span></div>
+            <div class="sum-row"><span style="font-weight:700;color:var(--gold)">合計</span><span class="mono" style="color:var(--gold)" id="s-total">$0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── PAGE: EXPORT ─── -->
+    <div class="page" id="page-export">
+      <div class="pg-title">📄 整理與匯出</div>
+      <div class="pg-sub">依專案自動分組憑證，填寫附件欄位後匯出 PDF 至 Drive</div>
+
+      <div style="display:grid;grid-template-columns:1fr 280px;gap:18px;align-items:start">
+        <div id="expMain">
+          <div style="text-align:center;color:var(--muted);padding:60px;font-size:13px" id="expEmpty">
+            請先完成 OCR 辨識，結果將自動分群顯示於此
+          </div>
+        </div>
+
+        <div>
+          <div class="card" style="margin-bottom:14px">
+            <div class="card-hd">📊 本次統計</div>
+            <div class="card-bd" style="padding:0">
+              <div class="sum-row"><span>憑證總數</span><span class="mono" id="es-cnt">0</span></div>
+              <div class="sum-row"><span>🅿️ 停車費</span><span class="mono" id="es-park">$0</span></div>
+              <div class="sum-row"><span>📄 其他費用</span><span class="mono" id="es-other">$0</span></div>
+              <div class="sum-row"><span class="sum-amt">總申請</span><span class="mono sum-amt" id="es-total">$0</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hd">📤 匯出</div>
+            <div class="card-bd" style="display:flex;flex-direction:column;gap:10px">
+              <div class="frow"><label class="lbl">申請人確認</label>
+                <select class="inp" id="exp-person"><option value="">— 請選擇 —</option></select>
+              </div>
+              <div class="frow"><label class="lbl">申請月份</label><input type="month" class="inp" id="exp-month"></div>
+              <button class="btn btn-primary btn-full" onclick="doExportAll()">✅ 全部匯出 PDF</button>
+              <button class="btn btn-ghost btn-full" onclick="refreshExport()">🔄 重新整理分群</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /mainArea -->
+</div><!-- /appShell -->
+
+<!-- ═══════════════════════════════════════════════════
+     MAPS MODAL (Distance Matrix result)
+════════════════════════════════════════════════════ -->
+<div class="modal-wrap" id="mapsModal">
+  <div class="modal-box" style="max-width:480px">
+    <div style="font-size:17px;font-weight:700;margin-bottom:16px">🗺 Google Maps 距離查詢</div>
+    <div id="mapsModalBody"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('mapsModal')">關閉</button>
+      <button class="btn btn-primary" style="flex:2" id="btnApplyKm" onclick="applyKm()">套用此公里數</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════════════════════
+const CFG = {
+  GAS_URL:      'https://script.google.com/macros/s/AKfycbzIf6tPlZa-Y3K4s4GtF-tQzspz2VA7qgmxOTiFHl104Z7f37v_QaDcrzGK_YVuCP8K/exec'
+};
+
+// ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+function getMileageRate(yearMonth) {
+  // yearMonth: 'YYYY-MM' or 'YYYY-MM-DD'; default = current month
+  const ym     = (yearMonth || today().slice(0,7)).slice(0,7);
+  const refDay = ym + '-01'; // compare against first day of month
+  const rates  = (S.config && S.config.mileageRates) ? S.config.mileageRates : [];
+
+  // Filter: effectDate <= refDay AND (endDate blank OR endDate >= refDay)
+  const candidates = rates.filter(r =>
+    r.effectDate <= refDay &&
+    (!r.endDate || r.endDate >= refDay)
+  );
+
+  // Among candidates pick the most recently effective one
+  candidates.sort((a,b) => b.effectDate.localeCompare(a.effectDate));
+  return parseFloat(candidates[0].rate);
+}
+
+// ════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════
+const S = {
+  user: null,
+  config: { persons:[], departments:[], projects:[] },
+  pendingFiles: [],
+  driveFiles: [],
+  ocrQueue: [],
+  receipts: [],
+};
+
+// pending Maps query context
+let mapsCtx = { pid:'', rowIdx:0, km:0, origin:'', dest:'' };
+
+// ════════════════════════════════════════════════════════════
+// BOOT
+// ════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // Default month
+  const ym = new Date().toISOString().slice(0,7);
+  document.getElementById('up-month').value  = ym;
+  document.getElementById('exp-month').value = ym;
+
+  // Drop zone
+  const dz = document.getElementById('dz');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); onFilePick(e.dataTransfer.files); });
+
+  // Check if returning from LINE OAuth callback
+  handleLineCallback();
+});
+
+// ════════════════════════════════════════════════════════════
+// LINE LOGIN  (OAuth 2.0 / Login Channel)
+// ════════════════════════════════════════════════════════════
+async function startLineLogin() {
+  // CH_ID and redirect URI come from GAS — fetch first
+  let chId = '', redirect = '';
+  try {
+    const res = await callGAS({ action: 'getLineConfig' });
+    if (res.success) { chId = res.channelId; redirect = res.redirectUri; }
+  } catch (_) {}
+
+  if (!chId) {
+    toast('⚠️ GAS 尚未設定 LINE_CHANNEL_ID，請洽管理員');
+    return;
+  }
+
+  const state = crypto.randomUUID();
+  sessionStorage.setItem('line_state', state);
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id:     chId,
+    redirect_uri:  redirect || window.location.href.split('?')[0],
+    state,
+    scope:         'profile openid email',
+    nonce:         crypto.randomUUID(),
+  });
+  window.location.href = 'https://access.line.me/oauth2/v2.1/authorize?' + params;
+}
+
+function handleLineCallback() {
+  const qs = new URLSearchParams(window.location.search);
+  const code  = qs.get('code');
+  const state = qs.get('state');
+
+  if (!code) return; // not a callback
+
+  // Show callback message
+  document.getElementById('loginCallbackMsg').style.display = 'block';
+
+  if (state !== sessionStorage.getItem('line_state')) {
+    toast('❌ LINE 登入 state 不符，請重試'); return;
+  }
+
+  // Clean URL
+  window.history.replaceState({}, '', window.location.pathname);
+
+  // Exchange code via GAS (keep Channel Secret server-side)
+  callGAS({ action: 'lineToken', code })
+    .then(res => {
+      if (res.success) {
+        finishLogin(res.person);
+      } else {
+        toast('❌ LINE 登入失敗：' + (res.error || '未知'));
+      }
+    });
+}
+
+function finishLogin(person) {
+  S.user = person;
+  document.getElementById('loginWrap').style.display = 'none';
+  document.getElementById('appShell').style.display  = 'grid';
+  renderUserBar();
+  loadConfig();
+  loadDriveFiles();
+}
+
+function renderUserBar() {
+  const u = S.user;
+  document.getElementById('uName').textContent      = u.name;
+  document.getElementById('uDeptTitle').textContent = (u.dept||'') + (u.title ? ' · '+u.title : '');
+  const av = document.getElementById('uAvatar');
+  if (u.avatar) av.innerHTML = `<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover">`;
+  else av.textContent = u.name.slice(0,1);
+}
+
+function devLogin() {
+  finishLogin({ name:'Joan', dept:'研發部', title:'工程師', lineId:'Udev', email:'dev@example.com', avatar:'' });
+}
+
+function logout() {
+  S.user = null;
+  document.getElementById('appShell').style.display  = 'none';
+  document.getElementById('loginWrap').style.display = 'flex';
+}
+
+// ════════════════════════════════════════════════════════════
+// CONFIG FROM SHEET
+// ════════════════════════════════════════════════════════════
+async function loadConfig() {
+  log('同步設定中...');
+  try {
+    const res = await callGAS({ action:'getConfig' });
+    if (res.success) { S.config = res.data; log('✅ 同步完成 ' + now()); }
+    else throw new Error(res.error);
+  } catch { S.config = demoConfig(); log('⚠️ 範例資料（GAS 未連線）'); }
+  populateSelects();
+}
+
+function demoConfig() {
+  return {
+    persons:[
+      { name:'Joan',  dept:'研發部', title:'工程師',    lineId:'Udev', email:'dev@example.com', depts:['研發部','業務部'] },
+      { name:'王小明', dept:'業務部', title:'業務專員',  lineId:'U002', email:'w@ex.com',        depts:['業務部'] },
+    ],
+    departments:['業務部','研發部','財務部','行政部'],
+    projects:[
+      { id:'P001', name:'Hermes 專案', quota:true,  subsidy:3000, effectDate:'2025-01-01', closeDate:'2025-12-31' },
+      { id:'P002', name:'群創-金龍',   quota:false, subsidy:0,    effectDate:'2025-03-01', closeDate:'2025-09-30' },
+      { id:'P003', name:'Alpha 計畫',  quota:true,  subsidy:2000, effectDate:'2024-07-01', closeDate:'2026-06-30' },
+    ],
+    // 全域里程補助標準歷史
+    mileageRates:[
+      { rate:7,   effectDate:'2024-01-01', endDate:'2024-12-31', note:'2024 年度標準' },
+      { rate:7.5, effectDate:'2025-01-01', endDate:'',           note:'2025 年度調整' },
+    ],
+  };
+}
+
+function populateSelects() {
+  const ps = S.config.persons;
+  ['up-person','exp-person'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— 請選擇 —</option>' +
+      ps.map(p => `<option value="${p.name}">${p.name}（${p.dept}）</option>`).join('');
+    if (cur) sel.value = cur;
+    if (S.user) sel.value = S.user.name;
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// FILE UPLOAD FLOW
+// ════════════════════════════════════════════════════════════
+function onFilePick(files) {
+  S.pendingFiles = Array.from(files);
+  renderPendingFiles();
+  document.getElementById('btnUpload').disabled = !S.pendingFiles.length;
+}
+
+function renderPendingFiles() {
+  const c = document.getElementById('fileList');
+  c.innerHTML = S.pendingFiles.map((f,i) => {
+    const isImg = f.type.startsWith('image/');
+    return `<div class="file-item">
+      <div class="file-thumb" id="ft-${i}">${isImg?'':'📄'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</div>
+        <div style="font-size:11px;color:var(--muted)">${(f.size/1024).toFixed(1)} KB</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="removePending(${i})">✕</button>
+    </div>`;
+  }).join('');
+  S.pendingFiles.forEach((f,i) => {
+    if (!f.type.startsWith('image/')) return;
+    const r = new FileReader();
+    r.onload = e => {
+      const t = document.getElementById('ft-'+i);
+      if (t) t.innerHTML = `<img src="${e.target.result}" alt="">`;
+    };
+    r.readAsDataURL(f);
+  });
+}
+
+function removePending(i) {
+  S.pendingFiles.splice(i,1);
+  renderPendingFiles();
+  document.getElementById('btnUpload').disabled = !S.pendingFiles.length;
+}
+
+async function doUpload() {
+  const person = document.getElementById('up-person').value;
+  const month  = document.getElementById('up-month').value;
+  if (!S.pendingFiles.length) { toast('⚠️ 請先選擇檔案'); return; }
+  if (!person) { toast('⚠️ 請選擇申請人'); return; }
+
+  setBtnLoading('btnUpload', true, '上傳中...');
+  const progCard = document.getElementById('upProgCard');
+  const bar = document.getElementById('upProgBar');
+  const txt = document.getElementById('upProgTxt');
+  const fl  = document.getElementById('upProgFile');
+  progCard.style.display = 'block';
+
+  const done = [];
+  for (let i=0; i<S.pendingFiles.length; i++) {
+    const f = S.pendingFiles[i];
+    txt.textContent = `${i+1}/${S.pendingFiles.length}`;
+    bar.style.width = `${(i/S.pendingFiles.length)*100}%`;
+    fl.textContent  = f.name;
+    try {
+      const b64 = await toBase64(f);
+      const res = await callGAS({ action:'uploadFile', fileName:`${month}_${person}_${f.name}`, mimeType:f.type, base64:b64, person, month });
+      done.push({ id:res.fileId||'sim_'+Date.now(), name:f.name, size:(f.size/1024).toFixed(1)+' KB', time:now(), url:res.fileUrl||'#', mimeType:f.type, dataUrl:res.dataUrl||'' });
+    } catch(e) { toast('❌ '+f.name+' 上傳失敗'); }
+  }
+
+  bar.style.width='100%'; fl.textContent='✅ 完成';
+  setBtnLoading('btnUpload', false, '☁️ 上傳至 Drive');
+  renderUploadedList(done);
+  badge('nb-upload', done.length);
+  S.pendingFiles=[];
+  renderPendingFiles();
+  toast(`✅ 已上傳 ${done.length} 個檔案`);
+  loadDriveFiles();
+}
+
+function renderUploadedList(files) {
+  document.getElementById('uploadedCard').style.display='block';
+  document.getElementById('uploadedCnt').textContent=files.length+' 個';
+  document.getElementById('uploadedTbl').innerHTML = files.map((f,i) =>
+    `<tr><td style="font-size:12px">${f.name}</td><td class="mono" style="font-size:11px">${f.size}</td>
+     <td style="font-size:11px;color:var(--muted)">${f.time}</td>
+     <td><a href="${f.url}" target="_blank" style="color:var(--accent);font-size:12px">開啟↗</a></td>
+     <td><button class="btn btn-green btn-sm" onclick='addQueue(${JSON.stringify(f)})'>+ 辨識</button></td></tr>`
+  ).join('');
+}
+
+// ════════════════════════════════════════════════════════════
+// DRIVE FILES (Sheet records)
+// ════════════════════════════════════════════════════════════
+async function loadDriveFiles() {
+  try {
+    const res = await callGAS({ action:'listFiles' });
+    S.driveFiles = res.files || demoDriveFiles();
+  } catch { S.driveFiles = demoDriveFiles(); }
+  renderDriveFiles();
+}
+
+function demoDriveFiles() {
+  return [
+    { id:'f1', name:'2025-05_Joan_receipt1.jpg', date:'2025-05-10', mimeType:'image/jpeg' },
+    { id:'f2', name:'2025-05_Joan_receipt2.jpg', date:'2025-05-12', mimeType:'image/jpeg' },
+    { id:'f3', name:'2025-05_Joan_fuel.jpg',     date:'2025-05-14', mimeType:'image/jpeg' },
+  ];
+}
+
+function renderDriveFiles() {
+  document.getElementById('driveFileTbl').innerHTML = S.driveFiles.map((f,i) => `
+    <tr>
+      <td><div class="chkbox" id="dc-${i}" onclick="toggleDriveChk(${i})"></div></td>
+      <td style="font-size:12px">${f.name}</td>
+      <td style="font-size:11px;color:var(--muted)">${f.date}</td>
+    </tr>`).join('');
+}
+
+function toggleDriveChk(i) {
+  document.getElementById('dc-'+i)?.classList.toggle('on');
+  const any = S.driveFiles.some((_,j) => document.getElementById('dc-'+j)?.classList.contains('on'));
+  document.getElementById('btnSendOCR').disabled = !any;
+}
+
+function toggleAllDrive() {
+  const box = document.getElementById('chkAll');
+  box.classList.toggle('on');
+  const checked = box.classList.contains('on');
+  S.driveFiles.forEach((_,i) => { const b=document.getElementById('dc-'+i); if(b) { if(checked) b.classList.add('on'); else b.classList.remove('on'); } });
+  document.getElementById('btnSendOCR').disabled = !checked;
+}
+
+function sendToOCR() {
+  const sel = S.driveFiles.filter((_,i) => document.getElementById('dc-'+i)?.classList.contains('on'));
+  sel.forEach(f => addQueue(f));
+  nav('ocr');
+  toast(`加入 ${sel.length} 個至辨識佇列`);
+}
+
+// ════════════════════════════════════════════════════════════
+// OCR QUEUE
+// ════════════════════════════════════════════════════════════
+function addQueue(file) {
+  if (S.ocrQueue.find(q => q.id === file.id)) { toast('已在佇列'); return; }
+  S.ocrQueue.push({ ...file, status:'pending' });
+  renderQueue();
+  document.getElementById('btnOCR').disabled = false;
+  badge('nb-ocr', S.ocrQueue.length);
+}
+
+function renderQueue() {
+  document.getElementById('queueCnt').textContent = S.ocrQueue.length+' 個';
+  const c = document.getElementById('queueList');
+  if (!S.ocrQueue.length) {
+    c.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:13px">佇列為空</div>'; return;
+  }
+  c.innerHTML = S.ocrQueue.map((f,i) => `
+    <div class="file-item">
+      <div style="font-size:20px">🖼️</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</div>
+        <span class="badge ${f.status==='done'?'bd-green':f.status==='error'?'bd-red':'bd-muted'}">${
+          f.status==='done'?'✅ 完成':f.status==='error'?'❌ 失敗':'⏳ 待辨識'}</span>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="removeQueue(${i})">✕</button>
+    </div>`).join('');
+}
+
+function removeQueue(i) { S.ocrQueue.splice(i,1); renderQueue(); badge('nb-ocr', S.ocrQueue.length); }
+function clearQueue()    { S.ocrQueue=[]; renderQueue(); badge('nb-ocr',0); document.getElementById('btnOCR').disabled=true; }
+
+// ════════════════════════════════════════════════════════════
+// RUN OCR
+// ════════════════════════════════════════════════════════════
+async function runOCR() {
+  const pending = S.ocrQueue.filter(q => q.status==='pending');
+  if (!pending.length) { toast('沒有待辨識項目'); return; }
+  setStep(2);
+  setBtnLoading('btnOCR', true, '辨識中');
+  document.getElementById('ocrProgCard').style.display='block';
+  const bar=document.getElementById('ocrProgBar'), txt=document.getElementById('ocrProgTxt'), fl=document.getElementById('ocrProgFile');
+
+  for (let i=0; i<pending.length; i++) {
+    const qf = pending[i];
+    txt.textContent=`${i+1}/${pending.length}`; bar.style.width=`${(i/pending.length)*100}%`; fl.textContent=qf.name;
+
+    try {
+      // Fetch base64 from Drive via GAS if no local data
+      let b64 = qf.dataUrl || '';
+      if (!b64 && qf.id && !qf.id.startsWith('sim_')) {
+        const fr = await callGAS({ action:'getFileBase64', fileId:qf.id });
+        b64 = fr.base64 || 'DEMO';
+      }
+      const res = await callGAS({ action:'ocrReceipt', fileName:qf.name, mimeType:qf.mimeType||'image/jpeg', base64:b64||'DEMO', fileId:qf.id });
+      const items = (res.success && res.items) ? res.items : demoItems(qf.name);
+      items.forEach((item, idx) => {
+        const id = `${qf.id}_${idx}`;
+        if (!S.receipts.find(r => r.id===id))
+          S.receipts.push(mkReceipt(id, qf, item, idx));
+      });
+      qf.status='done';
+    } catch(e) {
+      qf.status='error';
+      S.receipts.push({ id:qf.id+'_err', source:qf.name, status:'error', error:e.message, category:'other', attribution:'project', projectId:'', dept:S.user?.dept||'', vendor:'辨識失敗', amount:0, date:'', invoiceNo:'', notes:'', editData:{} });
+    }
+    renderQueue();
+  }
+  bar.style.width='100%'; fl.textContent='✅ 全部完成';
+  setStep(3);
+  setBtnLoading('btnOCR', false, '▶ 開始辨識');
+  renderOCRResults();
+  updateStats();
+  document.getElementById('ocrDoneBar').style.display='block';
+  toast(`✅ 辨識完成：共 ${S.receipts.length} 張憑證`);
+}
+
+function demoItems(name) {
+  const isP = /park|停/i.test(name);
+  return isP
+    ? [{ vendor:'台南市立停車場', amount:60,   date:today(), invoiceNo:'PK-00001', notes:'停車費',  category:'parking' }]
+    : [{ vendor:'全家便利商店',   amount:156,  date:today(), invoiceNo:'AB-12345678', notes:'辦公用品', category:'other' },
+       { vendor:'台灣中油',       amount:1200, date:today(), invoiceNo:'OL-87654321', notes:'油費',    category:'other' }];
+}
+
+function mkReceipt(id, qf, item, idx) {
+  return {
+    id, source:qf.name, idx,
+    status:'done',
+    category: detectCat(item),
+    attribution:'project',
+    projectId:'', dept: S.user?.dept||'',
+    vendor:  item.vendor || item.merchant || '（未辨識）',
+    amount:  parseFloat(item.amount || item.total || 0),
+    date:    item.date || '',
+    invoiceNo: item.invoiceNo || '',
+    notes:   item.notes || '',
+    error:   null,
+    editData:{ startPoint:'', endPoint:'', km:'', reason:'', isRoundTrip:true }
+  };
+}
+
+function detectCat(item) {
+  return /停車|parking|car park|車位|泊/i.test(JSON.stringify(item)) ? 'parking' : 'other';
+}
+
+// ════════════════════════════════════════════════════════════
+// OCR RESULTS RENDER
+// ════════════════════════════════════════════════════════════
+function renderOCRResults() {
+  const c = document.getElementById('ocrResults');
+  c.innerHTML = S.receipts.map(r => rcHTML(r)).join('');
+  badge('nb-ocr', S.receipts.length);
+}
+
+function rcHTML(r) {
+  const proj = S.config.projects.find(p => p.id===r.projectId);
+  const projOpts = S.config.projects.map(p =>
+    `<option value="${p.id}" ${p.id===r.projectId?'selected':''}>${p.name}${p.quota?'（月定額）':'（里程）'}</option>`).join('');
+  const deptOpts = S.config.departments.map(d =>
+    `<option value="${d}" ${d===r.dept?'selected':''}>${d}</option>`).join('');
+
+  const catBadge   = r.category==='parking' ? `<span class="badge bd-orange">🅿️ 停車費</span>` : `<span class="badge bd-blue">📄 其他</span>`;
+  const statBadge  = r.status==='done' ? `<span class="badge bd-green">✅ 完成</span>` : `<span class="badge bd-red">❌ ${r.error||'失敗'}</span>`;
+  const attrLabel  = r.attribution==='project' ? (proj?proj.name:'未選') : r.attribution==='dept' ? r.dept : '其他';
+
+  return `<div class="rc sel" id="rc-${r.id}">
+    <div class="rc-hd" onclick="toggleRC('${r.id}')">
+      <div class="chkbox on" id="rck-${r.id}" onclick="event.stopPropagation();document.getElementById('rck-${r.id}').classList.toggle('on')"></div>
+      <div class="rc-thumb">🖼️</div>
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.vendor}</div>
+        <div style="font-size:11px;color:var(--muted)">${r.source}${r.idx>0?' [第'+r.idx+'張]':''} · ${r.date}</div>
+        <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${catBadge} ${statBadge}</div>
+      </div>
+      <div style="text-align:center;min-width:80px;font-size:12px">
+        <div style="color:var(--muted);font-size:10px">歸屬</div>
+        <div style="font-weight:600">${attrLabel}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="mono" style="font-size:16px;font-weight:700;color:var(--gold)">$${r.amount.toLocaleString()}</div>
+        <div style="font-size:11px;color:var(--muted)">${r.invoiceNo||'—'}</div>
+      </div>
+      <div style="color:var(--muted);font-size:12px">▼</div>
+    </div>
+    <div class="rc-body" id="rcb-${r.id}">
+      <!-- Edit fields -->
+      <div class="fg4" style="margin-bottom:12px">
+        <div><label class="lbl">廠商</label><input class="inp" value="${r.vendor}" onchange="upR('${r.id}','vendor',this.value)"></div>
+        <div><label class="lbl">金額</label><input type="number" class="inp" value="${r.amount}" onchange="upR('${r.id}','amount',+this.value);updateStats()"></div>
+        <div><label class="lbl">日期</label><input type="date" class="inp" value="${r.date}" onchange="upR('${r.id}','date',this.value)"></div>
+        <div><label class="lbl">發票號碼</label><input class="inp" value="${r.invoiceNo}" onchange="upR('${r.id}','invoiceNo',this.value)"></div>
+      </div>
+
+      <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+        <div>
+          <label class="lbl">費用類型</label>
+          <div class="tgl" style="width:200px">
+            <button class="tgl-btn ${r.category==='other'?'on':''}" onclick="upR('${r.id}','category','other');reRC('${r.id}')">📄 其他</button>
+            <button class="tgl-btn ${r.category==='parking'?'on':''}" onclick="upR('${r.id}','category','parking');reRC('${r.id}')">🅿️ 停車</button>
+          </div>
+        </div>
+        <div>
+          <label class="lbl">歸屬類型</label>
+          <div class="tgl" style="width:270px">
+            <button class="tgl-btn ${r.attribution==='project'?'on':''}" onclick="setAttr('${r.id}','project')">🗂 專案</button>
+            <button class="tgl-btn ${r.attribution==='dept'?'on':''}" onclick="setAttr('${r.id}','dept')">🏢 部門</button>
+            <button class="tgl-btn ${r.attribution==='other'?'on':''}" onclick="setAttr('${r.id}','other')">📋 其他</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="fg2" style="margin-bottom:12px">
+        <div id="pf-proj-${r.id}" style="${r.attribution!=='project'?'display:none':''}">
+          <label class="lbl">歸屬專案</label>
+          <select class="inp" onchange="upR('${r.id}','projectId',this.value);updateStats()">
+            <option value="">— 選擇 —</option>${projOpts}
+          </select>
+        </div>
+        <div id="pf-dept-${r.id}" style="${r.attribution!=='dept'?'display:none':''}">
+          <label class="lbl">歸屬部門</label>
+          <select class="inp" onchange="upR('${r.id}','dept',this.value)">
+            <option value="">— 選擇 —</option>${deptOpts}
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px"><label class="lbl">備註</label><input class="inp" value="${r.notes}" onchange="upR('${r.id}','notes',this.value)"></div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-danger btn-sm" onclick="delR('${r.id}')">🗑 刪除</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleRC('${r.id}')">收起</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function upR(id, k, v)   { const r=S.receipts.find(x=>x.id===id); if(r) r[k]=v; }
+function reRC(id)        { const r=S.receipts.find(x=>x.id===id); if(!r) return; document.getElementById('rc-'+id)?.outerHTML; document.getElementById('rc-'+id).outerHTML=rcHTML(r); updateStats(); }
+function toggleRC(id)    { document.getElementById('rcb-'+id)?.classList.toggle('open'); }
+function delR(id)        { S.receipts=S.receipts.filter(r=>r.id!==id); document.getElementById('rc-'+id)?.remove(); updateStats(); }
+
+function setAttr(id, attr) {
+  upR(id,'attribution',attr);
+  ['proj','dept'].forEach(t => {
+    const el = document.getElementById(`pf-${t}-${id}`);
+    if (el) el.style.display = (t==='proj'?attr==='project':attr==='dept') ? 'block' : 'none';
+  });
+  document.getElementById('rcb-'+id)?.querySelectorAll('.tgl-btn').forEach((b,i) => {
+    b.classList.toggle('on', ['project','dept','other'][i]===attr);
+  });
+}
+
+function updateStats() {
+  const park  = S.receipts.filter(r=>r.category==='parking').reduce((s,r)=>s+r.amount,0);
+  const other = S.receipts.filter(r=>r.category!=='parking').reduce((s,r)=>s+r.amount,0);
+  se('s-count', S.receipts.length);
+  se('s-park',  '$'+park.toLocaleString());
+  se('s-other', '$'+other.toLocaleString());
+  se('s-total', '$'+(park+other).toLocaleString());
+  se('es-cnt',  S.receipts.length);
+  se('es-park', '$'+park.toLocaleString());
+  se('es-other','$'+other.toLocaleString());
+  se('es-total','$'+(park+other).toLocaleString());
+}
+
+// ════════════════════════════════════════════════════════════
+// EXPORT GROUPS
+// ════════════════════════════════════════════════════════════
+function refreshExport() {
+  updateStats();
+  const main  = document.getElementById('expMain');
+  const empty = document.getElementById('expEmpty');
+  main.querySelectorAll('.exp-sec').forEach(e=>e.remove());
+
+  if (!S.receipts.length) { empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  // Group by attribution key
+  const groups = {};
+  S.receipts.forEach(r => {
+    const key = r.attribution==='project' ? 'proj:'+r.projectId
+              : r.attribution==='dept'    ? 'dept:'+r.dept
+              : 'other';
+    if (!groups[key]) groups[key]=[];
+    groups[key].push(r);
+  });
+
+  Object.entries(groups).forEach(([key,rs]) => {
+    const sec = buildExpSec(key, rs);
+    main.appendChild(sec);
+  });
+}
+
+function buildExpSec(key, rs) {
+  const div = document.createElement('div');
+  div.className='exp-sec';
+
+  let label='', proj=null;
+  if (key.startsWith('proj:')) {
+    proj = S.config.projects.find(p=>p.id===key.slice(5));
+    label = proj ? proj.name : '（未選專案）';
+  } else if (key.startsWith('dept:')) {
+    label = '🏢 ' + key.slice(5);
+  } else { label = '📋 其他'; }
+
+  const parkR  = rs.filter(r=>r.category==='parking');
+  const otherR = rs.filter(r=>r.category!=='parking');
+  const hasOil = otherR.some(r=>/中油|加油|fuel|oil|cpc/i.test(r.vendor+r.notes));
+
+  let badges='';
+  if (proj) {
+    if (proj.quota) {
+      badges += `<span class="badge bd-purple">📎 附件三</span>`;
+      if (parkR.length) badges += `<span class="badge bd-orange">📎 附件四</span>`;
+    } else {
+      badges += `<span class="badge bd-blue">📎 附件二</span>`;
+      if (parkR.length && !hasOil) badges += `<span class="badge bd-orange">📎 附件四</span>`;
+    }
+  }
+
+  const total = rs.reduce((s,r)=>s+r.amount,0);
+  div.innerHTML = `
+    <div class="exp-sec-hd" onclick="toggleExpSec(this)">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:14px;font-weight:700">${label}</span>
+        ${badges}
+        <span class="badge bd-muted">${rs.length} 張</span>
+        <span class="mono" style="font-size:13px;color:var(--gold)">$${total.toLocaleString()}</span>
+      </div>
+      <span id="exp-chev-${key}" style="color:var(--muted)">▼</span>
+    </div>
+    <div class="exp-sec-bd" id="expbd-${CSS.escape(key)}">
+      ${proj ? buildAttForms(proj, parkR, otherR, hasOil) : simpleList(rs)}
+    </div>`;
+  return div;
+}
+
+function simpleList(rs) {
+  return rs.map(r=>`<div class="info-row"><span>${r.vendor} · ${r.date}</span><span class="mono">$${r.amount.toLocaleString()}</span></div>`).join('');
+}
+
+function toggleExpSec(hd) {
+  const bd = hd.nextElementSibling;
+  bd.classList.toggle('open');
+  hd.querySelector('span:last-child').textContent = bd.classList.contains('open') ? '▲' : '▼';
+}
+
+function buildAttForms(proj, parkR, otherR, hasOil) {
+  let html='';
+  if (proj.quota) {
+    html += att3Form(proj, otherR);
+    if (parkR.length) html += att4Form(proj.id, parkR);
+  } else {
+    html += att2Form(proj, otherR, parkR);
+    if (parkR.length && !hasOil) html += att4Form(proj.id, parkR);
+  }
+  return html;
+}
+
+/* --- ATT 3 (月定額) --- */
+function att3Form(proj, rs) {
+  const month  = document.getElementById('exp-month').value || today().slice(0,7);
+  const total  = rs.reduce((s,r)=>s+r.amount,0);
+  const diff   = total - (proj.subsidy||0);
+  return `<div class="att-form">
+    <div class="att-title">📎 附件三 — 專案月定額制 核定彙總表</div>
+    <div class="fg3" style="margin-bottom:12px">
+      <div><label class="lbl">年月</label><input type="month" class="inp" value="${month}"></div>
+      <div><label class="lbl">專案名稱</label><input class="inp" value="${proj.name}" readonly></div>
+      <div><label class="lbl">核定補助（元）</label><input type="number" class="inp" value="${proj.subsidy}" id="a3sub-${proj.id}" oninput="recalcAtt3('${proj.id}',${total})"></div>
+    </div>
+    <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">費用憑證明細：</div>
+    ${rs.map(r=>`<div class="info-row"><span>${r.vendor} · ${r.invoiceNo||'—'} · ${r.date}</span><span class="mono">$${r.amount.toLocaleString()}</span></div>`).join('')}
+    <div class="calc-box" id="a3calc-${proj.id}">
+      <div class="calc-row"><span>發票金額合計</span><span class="mono" id="a3inv-${proj.id}">$${total.toLocaleString()}</span></div>
+      <div class="calc-row"><span>核定補助</span><span class="mono" id="a3sval-${proj.id}">－$${(proj.subsidy||0).toLocaleString()}</span></div>
+      <div class="calc-row calc-tot"><span>差額（申請補助）</span><span class="mono" id="a3diff-${proj.id}">$${diff.toLocaleString()}</span></div>
+    </div>
+  </div>`;
+}
+
+function recalcAtt3(pid, invTotal) {
+  const sub  = parseFloat(document.getElementById('a3sub-'+pid)?.value)||0;
+  const diff = invTotal - sub;
+  se('a3sval-'+pid, '－$'+sub.toLocaleString());
+  se('a3diff-'+pid, '$'+diff.toLocaleString());
+}
+
+/* --- ATT 2 (里程實報) --- */
+const att2Rows = {};
+
+function att2Form(proj, otherR, parkR) {
+  const rate      = getMileageRate(document.getElementById('exp-month').value || today().slice(0,7));
+  const parkTotal = parkR.reduce((s,r)=>s+r.amount,0);
+  att2Rows[proj.id] = 1;
+
+  return `<div class="att-form">
+    <div class="att-title">📎 附件二 — 里程實報制</div>
+    <div class="fg2" style="margin-bottom:12px">
+      <div><label class="lbl">專案名稱</label><input class="inp" value="${proj.name}" readonly></div>
+      <div><label class="lbl">補助標準（元/公里）</label>
+        <input type="number" class="inp" id="a2rate-${proj.id}" value="${rate}" oninput="calcAtt2('${proj.id}',${parkTotal})">
+      </div>
+    </div>
+    <div id="a2rows-${proj.id}">
+      ${a2RowHTML(proj.id, 0)}
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="addA2Row('${proj.id}',${parkTotal})" style="margin-bottom:12px">＋ 新增外勤記錄</button>
+
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">同專案停車費憑證（含入合計）：</div>
+    ${parkR.map(r=>`<div class="info-row"><span>🅿️ ${r.vendor} · ${r.date}</span><span class="mono">$${r.amount.toLocaleString()}</span></div>`).join('')}
+
+    <div class="calc-box">
+      <div class="calc-row"><span>里程補助小計</span><span class="mono" id="a2sub-${proj.id}">$0</span></div>
+      <div class="calc-row"><span>停車費合計</span><span class="mono">$${parkTotal.toLocaleString()}</span></div>
+      <div class="calc-row calc-tot"><span>合計申請金額</span><span class="mono" id="a2tot-${proj.id}">$${parkTotal.toLocaleString()}</span></div>
+    </div>
+  </div>`;
+}
+
+function a2RowHTML(pid, i) {
+  return `<div class="att-form" id="a2r-${pid}-${i}" style="margin-bottom:8px">
+    <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:8px">第 ${i+1} 筆外勤</div>
+    <div class="fg3" style="margin-bottom:8px">
+      <div><label class="lbl">外勤日期</label><input type="date" class="inp" id="a2d-${pid}-${i}"></div>
+      <div><label class="lbl">事由</label><input class="inp" id="a2rsn-${pid}-${i}" placeholder="外勤事由"></div>
+      <div><label class="lbl">來回 / 單程</label>
+        <div class="tgl">
+          <button class="tgl-btn on" id="a2rnd-${pid}-${i}" onclick="setRound(this,'${pid}',${i},true)">來回</button>
+          <button class="tgl-btn" id="a2one-${pid}-${i}" onclick="setRound(this,'${pid}',${i},false)">單程</button>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 110px auto;gap:8px;align-items:end">
+      <div>
+        <label class="lbl">起點</label>
+        <input class="inp" id="a2s-${pid}-${i}" placeholder="台南市南區" oninput="updMapsLink('${pid}',${i})">
+      </div>
+      <div>
+        <label class="lbl">終點</label>
+        <input class="inp" id="a2e-${pid}-${i}" placeholder="高雄市三民區" oninput="updMapsLink('${pid}',${i})">
+      </div>
+      <div>
+        <label class="lbl">公里數</label>
+        <input type="number" class="inp" id="a2km-${pid}-${i}" placeholder="0" oninput="calcAtt2('${pid}')">
+      </div>
+      <div>
+        <label class="lbl">查詢距離</label>
+        <button class="btn btn-outline btn-sm" onclick="queryMaps('${pid}',${i})">🗺 Maps</button>
+      </div>
+    </div>
+    <div id="a2km-result-${pid}-${i}" style="margin-top:6px"></div>
+    <div style="margin-top:8px"><label class="lbl">備註</label><input class="inp" id="a2note-${pid}-${i}" placeholder="備註說明"></div>
+  </div>`;
+}
+
+function addA2Row(pid, parkTotal) {
+  const i = att2Rows[pid]++;
+  document.getElementById('a2rows-'+pid)?.insertAdjacentHTML('beforeend', a2RowHTML(pid, i));
+}
+
+function setRound(btn, pid, i, isRound) {
+  document.getElementById(`a2rnd-${pid}-${i}`).classList.toggle('on', isRound);
+  document.getElementById(`a2one-${pid}-${i}`).classList.toggle('on', !isRound);
+  calcAtt2(pid);
+}
+
+function updMapsLink(pid, i) {
+  // nothing visual, user clicks Maps button to query
+}
+
+// ── Google Maps Distance Matrix ──
+async function queryMaps(pid, i) {
+  const origin = document.getElementById(`a2s-${pid}-${i}`)?.value?.trim();
+  const dest   = document.getElementById(`a2e-${pid}-${i}`)?.value?.trim();
+  if (!origin || !dest) { toast('⚠️ 請填入起點和終點'); return; }
+
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳ 查詢中';
+
+  let km = 0, durationText = '', distText = '';
+  try {
+    // Try via GAS proxy (keeps Maps key server-side)
+    const res = await callGAS({ action:'getDistance', origin, dest });
+    if (res.success) {
+      km           = res.km;
+      durationText = res.duration;
+      distText     = res.distText;
+    } else { throw new Error('GAS 連線失敗，請確認網路或聯絡管理員'); }
+
+    // Store for apply
+    mapsCtx = { pid, i, km, origin, dest };
+
+    // Show in result area
+    const res_el = document.getElementById(`a2km-result-${pid}-${i}`);
+    if (res_el) res_el.innerHTML = `<span class="km-result">📍 ${distText} · ⏱ ${durationText} · <strong>${km} km</strong></span>
+      <button class="btn btn-green btn-sm" style="margin-left:8px" onclick="applyKmInline('${pid}',${i},${km})">套用</button>`;
+
+    // Also show modal
+    showMapsModal(origin, dest, km, distText, durationText, pid, i);
+
+  } catch(e) {
+    toast('❌ Maps 查詢失敗：' + e.message);
+  }
+  btn.disabled = false; btn.textContent = '🗺 Maps';
+}
+
+function showMapsModal(origin, dest, km, dist, dur, pid, i) {
+  const isRound = document.getElementById(`a2rnd-${pid}-${i}`)?.classList.contains('on');
+  const rate    = parseFloat(document.getElementById('a2rate-'+pid)?.value) || getMileageRate();
+  const totalKm = km * (isRound ? 2 : 1);
+  const subsidy = Math.round(totalKm * rate);
+
+  document.getElementById('mapsModalBody').innerHTML = `
+    <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div class="info-row"><span>起點</span><span style="font-weight:600">${origin}</span></div>
+      <div class="info-row"><span>終點</span><span style="font-weight:600">${dest}</span></div>
+      <div class="info-row"><span>單程距離</span><span class="mono" style="color:var(--green);font-weight:700">${dist} (${km} km)</span></div>
+      <div class="info-row"><span>預估時間</span><span>${dur}</span></div>
+    </div>
+    <div class="calc-box">
+      <div class="calc-row"><span>單程公里數</span><span class="mono">${km} km</span></div>
+      <div class="calc-row"><span>${isRound?'來回 ×2':'單程 ×1'}</span><span class="mono">${totalKm} km</span></div>
+      <div class="calc-row"><span>補助標準</span><span class="mono">${rate} 元/km</span></div>
+      <div class="calc-row calc-tot"><span>里程補助</span><span class="mono">$${subsidy.toLocaleString()}</span></div>
+    </div>
+    <div style="margin-top:12px">
+      <a href="https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${encodeURIComponent(dest)}" target="_blank" class="maps-link" style="display:inline-flex">
+        🗺 在 Google Maps 中開啟路線
+      </a>
+    </div>`;
+
+  mapsCtx = { pid, i, km };
+  openModal('mapsModal');
+}
+
+function applyKm() {
+  applyKmInline(mapsCtx.pid, mapsCtx.i, mapsCtx.km);
+  closeModal('mapsModal');
+}
+
+function applyKmInline(pid, i, km) {
+  const el = document.getElementById(`a2km-${pid}-${i}`);
+  if (el) { el.value = km; calcAtt2(pid); }
+  toast(`✅ 已套用 ${km} km`);
+}
+
+function calcAtt2(pid) {
+  const rate = parseFloat(document.getElementById('a2rate-'+pid)?.value) || getMileageRate();
+  let kmSub = 0;
+  for (let i=0; i<(att2Rows[pid]||1); i++) {
+    const km   = parseFloat(document.getElementById(`a2km-${pid}-${i}`)?.value) || 0;
+    const isR  = document.getElementById(`a2rnd-${pid}-${i}`)?.classList.contains('on');
+    kmSub += km * (isR ? 2 : 1) * rate;
+  }
+  kmSub = Math.round(kmSub);
+  const parkTotal = S.receipts.filter(r=>r.category==='parking'&&r.projectId===pid).reduce((s,r)=>s+r.amount,0);
+  se('a2sub-'+pid, '$'+kmSub.toLocaleString());
+  se('a2tot-'+pid, '$'+(kmSub+parkTotal).toLocaleString());
+}
+
+/* --- ATT 4 (停車費) --- */
+function att4Form(pid, rs) {
+  return `<div class="att-form" style="margin-top:10px">
+    <div class="att-title">📎 附件四 — 停車費補助申請單</div>
+    ${rs.map((r,i) => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:8px">第 ${i+1} 筆</div>
+      <div class="fg3" style="margin-bottom:8px">
+        <div><label class="lbl">停車日期</label><input type="date" class="inp" value="${r.date}"></div>
+        <div><label class="lbl">廠商</label><input class="inp" value="${r.vendor}"></div>
+        <div><label class="lbl">事由</label><input class="inp" placeholder="停車事由"></div>
+      </div>
+      <div class="fg3">
+        <div><label class="lbl">憑證類型</label>
+          <select class="inp"><option>電子發票</option><option>統一發票</option><option>收據</option><option>停車收費單</option></select>
+        </div>
+        <div><label class="lbl">憑證號碼</label><input class="inp" value="${r.invoiceNo}"></div>
+        <div><label class="lbl">金額（元）</label><input type="number" class="inp" value="${r.amount}"></div>
+      </div>
+    </div>`).join('')}
+    <div class="calc-box">
+      <div class="calc-row calc-tot"><span>停車費合計</span><span class="mono">$${rs.reduce((s,r)=>s+r.amount,0).toLocaleString()}</span></div>
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════
+// EXPORT ACTION
+// ════════════════════════════════════════════════════════════
+async function doExportAll() {
+  const person = document.getElementById('exp-person').value;
+  const month  = document.getElementById('exp-month').value;
+  if (!person) { toast('⚠️ 請選擇申請人'); return; }
+  toast('⏳ 產生 PDF 中...');
+  try {
+    const res = await callGAS({
+      action:'exportAll', person, month,
+      receipts: S.receipts,
+      projects: S.config.projects
+    });
+    if (res.success) {
+      toast('✅ PDF 已產生！');
+      (res.urls||[]).forEach(u => window.open(u,'_blank'));
+    } else { toast('❌ '+res.error); }
+  } catch(e) { toast('❌ '+e.message); }
+}
+
+// ════════════════════════════════════════════════════════════
+// HISTORY
+// ════════════════════════════════════════════════════════════
+async function loadHistory() {
+  try {
+    const res = await callGAS({ action:'getHistory' });
+    const rows = res.rows || [];
+    document.getElementById('historyTbl').innerHTML = rows.length
+      ? rows.map(r => `<tr>
+          <td class="mono">${r.month||'—'}</td>
+          <td>${r.person||'—'}</td>
+          <td>${r.project||r.dept||'—'}</td>
+          <td><span class="badge bd-blue">${r.attachment||'—'}</span></td>
+          <td class="mono" style="color:var(--gold)">$${(r.amount||0).toLocaleString()}</td>
+          <td><span class="badge bd-green">${r.status||'—'}</span></td>
+          <td>${r.pdfUrl?`<a href="${r.pdfUrl}" target="_blank" style="color:var(--accent);font-size:12px">開啟↗</a>`:'—'}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px">尚無歷史紀錄</td></tr>';
+  } catch { toast('❌ 讀取歷史失敗'); }
+}
+
+// ════════════════════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════════════════════
+function nav(name) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelector(`.nav-item[data-page="${name}"]`)?.classList.add('active');
+  if (name==='export')   refreshExport();
+  if (name==='history')  loadHistory();
+}
+
+// ════════════════════════════════════════════════════════════
+// STEPS
+// ════════════════════════════════════════════════════════════
+function setStep(n) {
+  [1,2,3].forEach(i => {
+    const s=document.getElementById('st'+i);
+    s.classList.remove('active','done');
+    if(i<n) s.classList.add('done'); else if(i===n) s.classList.add('active');
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════════════════════════
+async function callGAS(payload) {
+  try {
+    const res = await fetch(CFG.GAS_URL + '?t=' + Date.now(), {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain' },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  } catch { return simulateGAS(payload); }
+}
+
+function simulateGAS(p) {
+  if (p.action==='getConfig')    return { success:false };
+  if (p.action==='lineToken')    return { success:true, person:{ name:'Joan', dept:'研發部', title:'工程師', lineId:'Udev', email:'dev@example.com', avatar:'' } };
+  if (p.action==='listFiles')    return { success:true, files:demoDriveFiles() };
+  if (p.action==='uploadFile')   return { success:true, fileId:'sim_'+Date.now(), fileUrl:'#', dataUrl:'' };
+  if (p.action==='ocrReceipt')   return { success:true, items:demoItems(p.fileName) };
+  if (p.action==='getDistance')  return { success:true, km:28.5, distText:'28.5 km', duration:'約 35 分鐘' };
+  if (p.action==='exportAll')    return { success:true, urls:[] };
+  if (p.action==='getHistory')   return { success:true, rows:[{ month:'2025-04', person:'Joan', project:'Hermes 專案', attachment:'附件三', amount:2850, status:'已核准', pdfUrl:'#' }] };
+  return { success:false, error:'未知操作' };
+}
+
+function toBase64(file) {
+  return new Promise((res,rej) => {
+    const r=new FileReader();
+    r.onload=e=>res(e.target.result.split(',')[1]);
+    r.onerror=rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function toast(msg, ms=3200) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._t);
+  t._t=setTimeout(()=>t.classList.remove('show'), ms);
+}
+
+function log(msg) {
+  const el=document.getElementById('syncLog');
+  if(el) el.innerHTML += msg+'<br>';
+  se('syncStatus', msg.slice(0,40));
+}
+
+function badge(id, n) {
+  const el=document.getElementById(id);
+  if(!el) return;
+  if(n>0){el.style.display='inline';el.textContent=n;}else el.style.display='none';
+}
+
+function se(id, txt) { const el=document.getElementById(id); if(el) el.textContent=txt; }
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function setBtnLoading(id, loading, label) {
+  const b=document.getElementById(id);
+  if(!b) return;
+  b.disabled=loading;
+  b.innerHTML=loading?`<div class="spin"></div> ${label}`:label;
+}
+function today() { return new Date().toISOString().slice(0,10); }
+function now()   { return new Date().toLocaleTimeString('zh-TW'); }
+</script>
+</body>
+</html>
