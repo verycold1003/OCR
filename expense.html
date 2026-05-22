@@ -786,8 +786,10 @@ async function doUpload() {
     try {
       const b64 = await toBase64(f);
       const res = await callGAS({ action:'uploadFile', fileName:`${month}_${person}_${f.name}`, mimeType:f.type, base64:b64, person, month });
+      if (res.sheetErr) console.warn('Uploads sheet 寫入失敗：', res.sheetErr);
+      if (res.sheetOk === false) toast('⚠️ 檔案已上傳 Drive，但 Sheet 紀錄失敗：' + (res.sheetErr || ''));
       done.push({ id:res.fileId||'sim_'+Date.now(), name:f.name, size:(f.size/1024).toFixed(1)+' KB', time:now(), url:res.fileUrl||'#', mimeType:f.type, dataUrl:res.dataUrl||'' });
-    } catch(e) { toast('❌ '+f.name+' 上傳失敗'); }
+    } catch(e) { toast('❌ '+f.name+' 上傳失敗：' + e.message); }
   }
 
   bar.style.width='100%'; fl.textContent='✅ 完成';
