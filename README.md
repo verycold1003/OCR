@@ -1,2 +1,2 @@
-# OCR
-OCR
+# strontek
+strontek
