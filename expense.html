@@ -215,6 +215,14 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
   </div>
 </div>
 
+<div id="bindNameSection" style="display:none;margin-top:20px">
+  <div style="font-size:13px;color:var(--muted);margin-bottom:10px">
+    找不到您的 LINE ID，請輸入姓名以完成綁定
+  </div>
+  <input id="bindNameInput" class="inp" placeholder="請輸入您的中文姓名" style="margin-bottom:10px">
+  <button class="btn btn-primary btn-full" onclick="doBindName()">確認綁定</button>
+</div>
+
 <!-- ═══════════════════════════════════════════════════
      APP SHELL
 ════════════════════════════════════════════════════ -->
@@ -582,6 +590,9 @@ function handleLineCallback() {
     .then(res => {
       if (res.success) {
         finishLogin(res.person);
+      } else if (res.needName) {
+        S._pendingBind = { lineId: res.lineId, lineName: res.lineName, avatar: res.avatar, email: res.email };
+        showBindNameUI();
       } else {
         toast('❌ LINE 登入失敗：' + (res.error || '未知'));
       }
@@ -597,6 +608,23 @@ function finishLogin(person) {
   loadDriveFiles();
 }
 
+function showBindNameUI() {
+  document.getElementById('loginCallbackMsg').style.display = 'none';
+  document.getElementById('bindNameSection').style.display = 'block';
+}
+
+async function doBindName() {
+  const name = document.getElementById('bindNameInput').value.trim();
+  if (!name) { toast('⚠️ 請輸入姓名'); return; }
+  const b = S._pendingBind;
+  const res = await callGAS({ action: 'bindName', name, ...b });
+  if (res.success) {
+    S._pendingBind = null;
+    finishLogin(res.person);
+  } else {
+    toast('❌ ' + res.error);
+  }
+}
 function renderUserBar() {
   const u = S.user;
   document.getElementById('uName').textContent      = u.name;
