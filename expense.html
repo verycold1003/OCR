@@ -650,11 +650,8 @@ function loginLog(msg) {
 
 function finishLogin(person) {
   S.user = person;
-  // 隱藏驗證訊息，避免登出後重新顯示
   document.getElementById('loginCallbackMsg').style.display = 'none';
   document.getElementById('bindNameSection').style.display  = 'none';
-  const logBox = document.getElementById('loginMsgLog');
-  if (logBox) { logBox.style.display = 'none'; logBox.innerHTML = ''; }
   document.getElementById('loginWrap').style.display = 'none';
   document.getElementById('appShell').style.display  = 'grid';
   renderUserBar();
