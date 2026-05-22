@@ -232,7 +232,7 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
           此 LINE 帳號尚未綁定系統員工資料。<br>請輸入您的<strong style="color:var(--text)">中文姓名</strong>，系統將自動比對並完成綁定。
         </div>
       </div>
-      <div id="bindLineName" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+      <div id="bindLineName" style="font-size:13px;color:var(--text);background:rgba(255,255,255,.05);border-radius:7px;padding:8px 12px;margin-bottom:10px;line-height:1.8"></div>
       <label class="lbl" style="display:block;margin-bottom:5px">您的中文姓名</label>
       <input id="bindNameInput" class="inp" placeholder="例：張家榮" style="margin-bottom:12px" onkeydown="if(event.key==='Enter')doBindName()">
       <button class="btn btn-primary btn-full" id="btnBindName" onclick="doBindName()">🔗 比對並綁定帳號</button>
@@ -621,6 +621,9 @@ function handleLineCallback() {
 
 function finishLogin(person) {
   S.user = person;
+  // 隱藏驗證訊息，避免登出後重新顯示
+  document.getElementById('loginCallbackMsg').style.display = 'none';
+  document.getElementById('bindNameSection').style.display  = 'none';
   document.getElementById('loginWrap').style.display = 'none';
   document.getElementById('appShell').style.display  = 'grid';
   renderUserBar();
@@ -632,9 +635,13 @@ function showBindNameUI() {
   document.getElementById('loginCallbackMsg').style.display = 'none';
   document.getElementById('bindNameSection').style.display = 'block';
   const b = S._pendingBind;
-  if (b && b.lineName) {
+  if (b) {
     const el = document.getElementById('bindLineName');
-    if (el) el.textContent = 'LINE 顯示名稱：' + b.lineName;
+    if (el) {
+      el.innerHTML =
+        (b.lineName ? `LINE 顯示名稱：<strong>${b.lineName}</strong><br>` : '') +
+        (b.email    ? `Gmail：<strong>${b.email}</strong>` : '');
+    }
   }
   document.getElementById('bindNameInput').focus();
 }
