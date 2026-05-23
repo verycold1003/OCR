@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>雜支申請</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -295,7 +296,7 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
               <div class="dz" id="dz" onclick="const fi=document.getElementById('fileInput'); fi.value=''; fi.click();">
                 <div style="font-size:38px;margin-bottom:10px">🖼️</div>
                 <div style="font-size:15px;font-weight:700">點擊或拖曳照片 / PDF</div>
-                <div style="font-size:12px;color:var(--muted);margin-top:6px">每張照片可包含多張發票或油單<br>支援 JPG · PNG · PDF</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:6px">每張照片可包含多張發票或油單<br>支援 JPG · PNG · WEBP · HEIC · PDF</div>
               </div>
               <div id="fileList" style="margin-top:12px"></div>
             </div>
@@ -493,20 +494,16 @@ const CFG = {
 };
 
 // ════════════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════════════
 function getMileageRate(yearMonth) {
-  // yearMonth: 'YYYY-MM' or 'YYYY-MM-DD'; default = current month
   const ym     = (yearMonth || today().slice(0,7)).slice(0,7);
-  const refDay = ym + '-01'; // compare against first day of month
+  const refDay = ym + '-01';
   const rates  = (S.config && S.config.mileageRates) ? S.config.mileageRates : [];
 
-  // Filter: effectDate <= refDay AND (endDate blank OR endDate >= refDay)
   const candidates = rates.filter(r =>
     r.effectDate <= refDay &&
     (!r.endDate || r.endDate >= refDay)
   );
 
-  // Among candidates pick the most recently effective one
   candidates.sort((a,b) => b.effectDate.localeCompare(a.effectDate));
   return parseFloat(candidates[0].rate);
 }
@@ -530,18 +527,15 @@ let mapsCtx = { pid:'', rowIdx:0, km:0, origin:'', dest:'' };
 // BOOT
 // ════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  // Default month
   const ym = new Date().toISOString().slice(0,7);
   document.getElementById('up-month').value  = ym;
   document.getElementById('exp-month').value = ym;
 
-  // Drop zone
   const dz = document.getElementById('dz');
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
   dz.addEventListener('dragleave', () => dz.classList.remove('over'));
   dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); onFilePick(e.dataTransfer.files); });
 
-  // Check if returning from LINE OAuth callback
   handleLineCallback();
 });
 
@@ -596,20 +590,17 @@ function handleLineCallback() {
   const code  = qs.get('code');
   const state = qs.get('state');
 
-  if (!code) return; // not a callback
+  if (!code) return;
 
-  // Show callback message
   document.getElementById('loginCallbackMsg').style.display = 'block';
 
   if (state !== localStorage.getItem('line_state')) {
     toast('❌ LINE 登入 state 不符，請重試'); return;
   }
 
-  // Clean URL
   window.history.replaceState({}, '', window.location.pathname);
   localStorage.removeItem('line_state');
 
-  // Exchange code via GAS (keep Channel Secret server-side)
   callGAS({ action: 'lineToken', code })
     .then(res => {
       if (res.success) {
@@ -671,10 +662,16 @@ async function doBindName() {
 function renderUserBar() {
   const u = S.user;
   document.getElementById('uName').textContent      = u.name;
-  document.getElementById('uDeptTitle').textContent = (u.dept||'') + (u.title ? ' · '+u.title : '');
+  const p = S.config?.persons?.find(x => x.name === u.name);
+  const dept  = (p?.dept  || u.dept  || '');
+  const title = (p?.title || u.title || '');
+  const depts = (p?.depts && p.depts.length) ? p.depts : (dept ? [dept] : []);
+  document.getElementById('uDeptTitle').textContent = depts.join(' / ') + (title ? ' · ' + title : '');
   const av = document.getElementById('uAvatar');
   if (u.avatar) av.innerHTML = `<img src="${u.avatar}" style="width:100%;height:100%;object-fit:cover">`;
   else av.textContent = u.name.slice(0,1);
+  if (dept) S.user.dept = dept;
+  if (depts.length) S.user.depts = depts;
 }
 
 function logout() {
@@ -693,6 +690,7 @@ async function loadConfig() {
     if (res.success) { S.config = res.data; log('✅ 同步完成 ' + now()); }
     else throw new Error(res.error);
   } catch { log('GAS 未連線'); }
+  if (S.user) renderUserBar();
   populateSelects();
 }
 
@@ -705,6 +703,13 @@ function populateSelects() {
     upHidden.value      = S.user.name;
     const p = ps.find(x => x.name === S.user.name);
     upDisplay.textContent = p ? `${p.name}（${p.dept}）` : S.user.name;
+  }
+
+  const expPerson = document.getElementById('exp-person');
+  if (expPerson) {
+    const cur = expPerson.value;
+    expPerson.innerHTML = '<option value="">— 請選擇 —</option>' +
+      ps.map(p => `<option value="${p.name}" ${p.name === (S.user?.name||cur) ? 'selected' : ''}>${p.name}（${p.dept}）</option>`).join('');
   }
 }
 
@@ -766,11 +771,16 @@ async function doUpload() {
 
   const done = [];
   for (let i=0; i<S.pendingFiles.length; i++) {
-    const f = S.pendingFiles[i];
+    const rawFile = S.pendingFiles[i];
     txt.textContent = `${i+1}/${S.pendingFiles.length}`;
     bar.style.width = `${(i/S.pendingFiles.length)*100}%`;
-    fl.textContent  = f.name;
+    fl.textContent  = rawFile.name;
     try {
+      // heic/heif → jpeg 轉換（在上傳前處理，Drive 存的就是 jpeg）
+      const f = await normalizeFileForUpload(rawFile);
+      if (f.name !== rawFile.name) {
+        fl.textContent = `${rawFile.name} → ${f.name}（HEIC 轉換中）`;
+      }
       const b64 = await toBase64(f);
       const res = await callGAS({ action:'uploadFile', fileName:`${month}_${person}_${f.name}`, mimeType:f.type, base64:b64, person, month });
       // GAS 整體失敗（例外被 doPost catch 住）
@@ -783,7 +793,7 @@ async function doUpload() {
         toast('⚠️ ' + f.name + ' 已上傳 Drive，但 Sheet 紀錄失敗：' + (res.sheetErr || ''));
       }
       done.push({ id:res.fileId||'sim_'+Date.now(), name:f.name, size:(f.size/1024).toFixed(1)+' KB', time:now(), url:res.fileUrl||'#', mimeType:f.type, dataUrl:res.dataUrl||'' });
-    } catch(e) { toast('❌ '+f.name+' 上傳失敗：' + e.message); }
+    } catch(e) { toast('❌ '+rawFile.name+' 上傳失敗：' + e.message); }
   }
 
   bar.style.width='100%'; fl.textContent='✅ 完成';
@@ -998,14 +1008,14 @@ function rcHTML(r) {
       <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
         <div>
           <label class="lbl">費用類型</label>
-          <div class="tgl" style="width:200px">
-            <button class="tgl-btn ${r.category==='other'?'on':''}" onclick="upR('${r.id}','category','other');reRC('${r.id}')">📄 其他</button>
-            <button class="tgl-btn ${r.category==='parking'?'on':''}" onclick="upR('${r.id}','category','parking');reRC('${r.id}')">🅿️ 停車</button>
+          <div class="tgl" style="width:200px" id="tgl-cat-${r.id}">
+            <button class="tgl-btn ${r.category==='other'?'on':''}" onclick="setCat('${r.id}','other')">📄 其他</button>
+            <button class="tgl-btn ${r.category==='parking'?'on':''}" onclick="setCat('${r.id}','parking')">🅿️ 停車</button>
           </div>
         </div>
         <div>
           <label class="lbl">歸屬類型</label>
-          <div class="tgl" style="width:270px">
+          <div class="tgl" style="width:270px" id="tgl-attr-${r.id}">
             <button class="tgl-btn ${r.attribution==='project'?'on':''}" onclick="setAttr('${r.id}','project')">🗂 專案</button>
             <button class="tgl-btn ${r.attribution==='dept'?'on':''}" onclick="setAttr('${r.id}','dept')">🏢 部門</button>
             <button class="tgl-btn ${r.attribution==='other'?'on':''}" onclick="setAttr('${r.id}','other')">📋 其他</button>
@@ -1039,19 +1049,54 @@ function rcHTML(r) {
 }
 
 function upR(id, k, v)   { const r=S.receipts.find(x=>x.id===id); if(r) r[k]=v; }
-function reRC(id)        { const r=S.receipts.find(x=>x.id===id); if(!r) return; document.getElementById('rc-'+id)?.outerHTML; document.getElementById('rc-'+id).outerHTML=rcHTML(r); updateStats(); }
+
+// 費用類型切換 — 只更新按鈕樣式 + badge，不重繪整個卡片
+function setCat(id, cat) {
+  upR(id, 'category', cat);
+  // 更新費用類型 toggle 按鈕
+  const tgl = document.getElementById('tgl-cat-'+id);
+  if (tgl) tgl.querySelectorAll('.tgl-btn').forEach((b,i) => b.classList.toggle('on', ['other','parking'][i]===cat));
+  // 更新卡片 header 裡的 badge
+  const rc = document.getElementById('rc-'+id);
+  if (rc) {
+    const badgeEl = rc.querySelector('.rc-hd .badge');
+    if (badgeEl) {
+      badgeEl.className = 'badge ' + (cat==='parking' ? 'bd-orange' : 'bd-blue');
+      badgeEl.innerHTML = cat==='parking' ? '🅿️ 停車費' : '📄 其他';
+    }
+  }
+  updateStats();
+}
+
+function reRC(id) {
+  const r = S.receipts.find(x=>x.id===id);
+  if (!r) return;
+  const wasOpen = document.getElementById('rcb-'+id)?.classList.contains('open');
+  const el = document.getElementById('rc-'+id);
+  if (!el) return;
+  el.outerHTML = rcHTML(r);
+  if (wasOpen) document.getElementById('rcb-'+id)?.classList.add('open');
+  updateStats();
+}
 function toggleRC(id)    { document.getElementById('rcb-'+id)?.classList.toggle('open'); }
 function delR(id)        { S.receipts=S.receipts.filter(r=>r.id!==id); document.getElementById('rc-'+id)?.remove(); updateStats(); }
 
 function setAttr(id, attr) {
   upR(id,'attribution',attr);
+  const tgl = document.getElementById('tgl-attr-'+id);
+  if (tgl) tgl.querySelectorAll('.tgl-btn').forEach((b,i) => b.classList.toggle('on', ['project','dept','other'][i]===attr));
   ['proj','dept'].forEach(t => {
     const el = document.getElementById(`pf-${t}-${id}`);
     if (el) el.style.display = (t==='proj'?attr==='project':attr==='dept') ? 'block' : 'none';
   });
-  document.getElementById('rcb-'+id)?.querySelectorAll('.tgl-btn').forEach((b,i) => {
-    b.classList.toggle('on', ['project','dept','other'][i]===attr);
-  });
+  const rc = document.getElementById('rc-'+id);
+  if (rc) {
+    const r = S.receipts.find(x=>x.id===id);
+    const proj = S.config.projects.find(p=>p.id===r?.projectId);
+    const attrLabel = attr==='project' ? (proj?proj.name:'未選') : attr==='dept' ? (r?.dept||'') : '其他';
+    const labelDiv = rc.querySelector('.rc-hd > div[style*="歸屬"]');
+    if (labelDiv) labelDiv.querySelector('div:last-child').textContent = attrLabel;
+  }
 }
 
 function updateStats() {
@@ -1480,6 +1525,27 @@ function toBase64(file) {
     r.onerror=rej;
     r.readAsDataURL(file);
   });
+}
+
+// heic/heif → jpeg（上傳前轉換，Drive 存 jpeg 方便後續處理）
+// jpeg / png / gif / webp / pdf 直接通過
+async function normalizeFileForUpload(file) {
+  const name = file.name.toLowerCase();
+  const mime = file.type || '';
+  const isHeic = mime === 'image/heic' || mime === 'image/heif' ||
+                 name.endsWith('.heic') || name.endsWith('.heif');
+  if (!isHeic) return file;
+
+  try {
+    const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.88 });
+    // heic2any 動畫 heic 可能回傳 Blob[]，取第一張
+    const blob = Array.isArray(converted) ? converted[0] : converted;
+    const newName = file.name.replace(/\.heic$/i, '.jpg').replace(/\.heif$/i, '.jpg');
+    return new File([blob], newName, { type: 'image/jpeg' });
+  } catch (e) {
+    console.warn('[normalizeFileForUpload] heic 轉換失敗，改用原檔：', e);
+    return file; // fallback：原檔送出，GAS 端當 jpeg 處理
+  }
 }
 
 function toast(msg, ms=3200) {
