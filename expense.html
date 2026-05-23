@@ -4,18 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>雜支申請</title>
-<script>
-// heic2any 載入確認（CDN 有時較慢，doUpload 前會再檢查）
-window._heic2anyLoaded = false;
-</script>
-<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"
-  onload="window._heic2anyLoaded=true; console.log('[heic2any] 載入成功')"
-  onerror="console.warn('[heic2any] CDN 載入失敗，嘗試備用...');
-    var s=document.createElement('script');
-    s.src='https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js';
-    s.onload=function(){window._heic2anyLoaded=true;console.log('[heic2any] 備用 CDN 載入成功');};
-    document.head.appendChild(s);">
-</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <style>
@@ -990,7 +978,6 @@ async function runOCR() {
     else if (qa === 'other')         { attribution = 'other';   attributionTarget = ''; }
 
     try {
-      // 從 Drive 取 base64（上傳時已統一轉 JPEG）
       let b64 = '';
       if (qf.id) {
         const fr = await callGAS({ action: 'getFileBase64', fileId: qf.id });
@@ -1672,79 +1659,16 @@ async function callGAS(payload) {
   }
 }
 
-// ===========================================================
-//  修正後：支援 HEIC 轉檔與 Canvas 縮圖的完美流暢版
-// ===========================================================
-
-async function toBase64(file) {
-  let blobToProcess = file;
-
-  // 1. 攔截 iPhone HEIC / HEIF 格式
-  if (file.name.toLowerCase().endsWith('.heic') || file.type.includes('heic')) {
-    if (!window._heic2anyLoaded) {
-      throw new Error('HEIC 轉換元件尚未載入完成，請稍候再試。');
-    }
-    try {
-      console.log('[HEIC 偵測] 正在將 iPhone 原生格式轉換為 JPEG...');
-      // 轉檔時品質給 1.0 (保留點陣資料)，稍後統一由 Canvas 壓縮與縮放
-      const convertedBlob = await heic2any({
-        blob: file,
-        toType: 'image/jpeg',
-        quality: 1.0
-      });
-      
-      // heic2any 有時會回傳 Blob 陣列，做個保險防呆
-      blobToProcess = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-      console.log('[HEIC 轉檔成功] 已成功建立 JPEG 點陣資料');
-    } catch (err) {
-      console.error('HEIC 轉碼失敗:', err);
-      throw new Error('iPhone 照片解碼失敗，請嘗試直接截圖發票後上傳。');
-    }
-  }
-
-  // 2. 將標準 Blob 餵給 Canvas 進行等比例縮小與壓縮，並轉成最終 Base64
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(blobToProcess);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url); // 釋放記憶體
-
-      // 設定最大寬度（發票辨識 1200px ~ 1600px 準確度最高且檔案小）
-      const MAX_WIDTH = 1200;
-      let w = img.width;
-      let h = img.height;
-
-      if (w > MAX_WIDTH) {
-        h = Math.round((h * MAX_WIDTH) / w);
-        w = MAX_WIDTH;
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-
-      // 統一導出為標準 JPEG，品質 0.75 兼顧清晰度與傳輸速度
-      const base64DataUrl = canvas.toDataURL('image/jpeg', 0.75);
-      
-      // 去除 data:image/jpeg;base64, 字首，只留下符合 Gemini API 的純字串
-      const pureBase64 = base64DataUrl.split(',')[1];
-      resolve(pureBase64);
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('圖片載入 Canvas 失敗，請確認檔案是否損壞'));
-    };
-
-    img.src = url;
+function toBase64(file) {
+  return new Promise((res,rej) => {
+    const r=new FileReader();
+    r.onload=e=>res(e.target.result.split(',')[1]);
+    r.onerror=rej;
+    r.readAsDataURL(file);
   });
 }
 
-// ── 上傳前統一轉 JPEG：支援 HEIC / PDF（多頁）/ 大圖壓縮 ──
+// ── 上傳前統一轉 JPEG：支援 PDF（多頁）/ 大圖壓縮；HEIC 直接原檔送 GAS ──
 async function normalizeFileForUpload(file) {
   const name = file.name.toLowerCase();
   const mime = file.type || '';
@@ -1754,71 +1678,26 @@ async function normalizeFileForUpload(file) {
     return await pdfToJpegFiles(file);
   }
 
-  const heic    = isHeicFile(file);
-  const isLarge = file.size > 2 * 1024 * 1024;
-
-  if (!heic && !isLarge) return [file];   // 普通圖片直接回傳
-
-  // ── HEIC：方法一 heic2any ──
-  if (heic) {
-    console.log('[HEIC] 偵測到 HEIC 檔案，大小:', (file.size/1024).toFixed(1), 'KB', '| type:', file.type||'(空)');
-
-    if (typeof heic2any !== 'undefined') {
-      try {
-        console.log('[HEIC] 開始 heic2any 轉換...');
-        toast('⏳ HEIC 轉換中，請稍候...');
-        const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
-        const blob      = Array.isArray(converted) ? converted[0] : converted;
-        const newName   = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-        console.log('[HEIC] heic2any 成功，輸出大小:', (blob.size/1024).toFixed(1), 'KB');
-        toast('\u2705 HEIC 轉換完成：' + newName);
-        return [new File([blob], newName, { type: 'image/jpeg' })];
-      } catch (e) {
-        console.warn('[HEIC] heic2any 失敗：', e);
-        toast('⚠️ heic2any 失敗，嘗試 Canvas...');
-      }
-    } else {
-      console.warn('[HEIC] heic2any 未載入，嘗試 Canvas fallback');
-      toast('⚠️ heic2any 未載入，嘗試 Canvas...');
-    }
-
-    // ── Canvas fallback（僅 Safari/iOS 支援解碼 HEIC）──
-    try {
-      console.log('[HEIC] 嘗試 Canvas fallback...');
-      const blob = await toJpegViaCanvas(file, 0.85);
-      if (blob) {
-        const newName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-        console.log('[HEIC] Canvas 成功，輸出大小:', (blob.size/1024).toFixed(1), 'KB');
-        toast('\u2705 HEIC Canvas 轉換完成：' + newName);
-        return [new File([blob], newName, { type: 'image/jpeg' })];
-      }
-    } catch (e) {
-      console.warn('[HEIC] Canvas 也失敗：', e);
-    }
-
-    // 兩種方式都失敗，原檔上傳
-    console.warn('[HEIC] 轉換全部失敗，以原 HEIC 格式上傳');
-    toast('⚠️ HEIC 轉換失敗，以原格式上傳（OCR 可能受影響）');
-    return [file];
+  if (isHeicFile(file)) {
+    const fixedFile = file.type ? file : new File([file], file.name, { type: 'image/heic' });
+    return [fixedFile];
   }
 
-  // ── 大圖壓縮 ──
+  const isLarge = file.size > 2 * 1024 * 1024;
+  if (!isLarge) return [file];
+
   try {
     const blob = await toJpegViaCanvas(file, 0.82);
     if (blob) {
-      console.log('[壓縮] 大圖壓縮完成:', (blob.size/1024).toFixed(0), 'KB');
-      toast('\u2705 大圖壓縮完成：' + (blob.size/1024).toFixed(0) + ' KB');
       return [new File([blob], file.name, { type: 'image/jpeg' })];
     }
   } catch (e) {
-    console.warn('[壓縮] Canvas 壓縮失敗：', e.message);
     toast('⚠️ ' + file.name + ' 無法壓縮，以原格式上傳');
   }
 
   return [file];
 }
 
-// ── PDF 逐頁轉 JPEG（pdf.js），回傳 File[] ──
 async function pdfToJpegFiles(file) {
   if (typeof pdfjsLib === 'undefined') {
     toast('⚠️ pdf.js 未載入，PDF 以原格式上傳');
@@ -1837,7 +1716,7 @@ async function pdfToJpegFiles(file) {
 
     for (let p = 1; p <= total; p++) {
       const page     = await pdf.getPage(p);
-      const viewport = page.getViewport({ scale: 2.0 }); // ~144 dpi，OCR 品質好
+      const viewport = page.getViewport({ scale: 2.0 });
       const canvas   = document.createElement('canvas');
       canvas.width   = viewport.width;
       canvas.height  = viewport.height;
@@ -1850,7 +1729,6 @@ async function pdfToJpegFiles(file) {
     }
     toast(`✅ PDF 轉換完成：${total} 頁`);
   } catch (e) {
-    console.warn('[PDF] 轉換失敗：', e.message);
     toast('⚠️ PDF 轉換失敗，以原格式上傳');
     return [file];
   }
@@ -1862,7 +1740,6 @@ function toJpegViaCanvas(file, quality = 0.88) {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      // 超大圖限制最長邊 2400px，避免 Canvas OOM
       const MAX = 2400;
       let { naturalWidth: w, naturalHeight: h } = img;
       if (w > MAX || h > MAX) {
