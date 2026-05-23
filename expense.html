@@ -486,6 +486,24 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
   </div>
 </div>
 
+<!-- DUPLICATE INVOICE MODAL -->
+<div class="modal-wrap" id="dupModal">
+  <div class="modal-box" style="max-width:520px">
+    <div style="font-size:17px;font-weight:700;margin-bottom:6px">⚠️ 重複發票號碼</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Gemini 辨識到的發票號碼已存在於紀錄中，請確認如何處理</div>
+    <div id="dupModalBody"></div>
+    <div style="display:flex;gap:8px;margin-top:20px">
+      <button class="btn btn-danger" style="flex:1" id="btnDupOverwrite" onclick="resolveDup('overwrite')">
+        🔄 覆蓋舊紀錄<br><span style="font-size:10px;font-weight:400;opacity:.8">舊的標記刪除，沿用此發票號碼</span>
+      </button>
+      <button class="btn btn-gold" style="flex:1" id="btnDupKeep" onclick="resolveDup('keepSerial')">
+        🆕 新增流水號<br><span style="font-size:10px;font-weight:400;opacity:.8">視為誤植，改用年月流水號</span>
+      </button>
+    </div>
+    <div id="dupRemaining" style="margin-top:12px;font-size:11px;color:var(--muted);text-align:center"></div>
+  </div>
+</div>
+
 <script>
 // ════════════════════════════════════════════════════════════
 // CONFIG
@@ -1001,6 +1019,12 @@ async function runOCR() {
           rec.attribution = attribution;
           if (attribution === 'project') rec.projectId = attributionTarget;
           else if (attribution === 'dept') rec.dept = attributionTarget;
+          // 記錄重複發票資訊
+          if (item.isDuplicate) {
+            rec._isDuplicate    = true;
+            rec._duplicateOfKey = item.duplicateOfKey || '';
+            rec._tempKey        = item.key || '';
+          }
           S.receipts.push(rec);
         }
       });
@@ -1033,8 +1057,16 @@ async function runOCR() {
   setStep(3);
   setBtnLoading('btnOCR', false, '▶ 開始辨識');
   updateStats();
-  document.getElementById('ocrDoneBar').style.cssText='display:flex;margin-top:12px;gap:8px';
-  toast(`✅ 辨識完成：共 ${S.receipts.length} 張憑證`);
+
+  // 若有重複發票號碼，啟動逐筆確認流程
+  const dupItems = S.receipts.filter(r => r._isDuplicate);
+  if (dupItems.length) {
+    toast(`⚠️ 發現 ${dupItems.length} 筆重複發票號碼，請逐一確認`);
+    startDupResolution(dupItems);
+  } else {
+    document.getElementById('ocrDoneBar').style.cssText='display:flex;margin-top:12px;gap:8px';
+    toast(`✅ 辨識完成：共 ${S.receipts.length} 張憑證`);
+  }
 }
 
 function mkReceipt(id, qf, item, idx) {
@@ -1051,6 +1083,9 @@ function mkReceipt(id, qf, item, idx) {
     ocrKey:    item.key || '',
     notes:     item.notes || '',
     error:     null,
+    _isDuplicate:    item.isDuplicate    || false,
+    _duplicateOfKey: item.duplicateOfKey || '',
+    _tempKey:        item.isDuplicate ? (item.key || '') : '',
     editData:{ startPoint:'', endPoint:'', km:'', reason:'', isRoundTrip:true }
   };
 }
@@ -1093,6 +1128,7 @@ function rcHTML(r) {
     : '<option value="" disabled>尚無部門資料</option>';
 
   const catBadge  = r.category==='parking' ? `<span class="badge bd-orange">🅿️ 停車費</span>` : `<span class="badge bd-blue">📄 其他</span>`;
+  const dupBadge  = r._isDuplicate ? `<span class="badge bd-red" title="發票號碼重複，暫用流水號 ${r._tempKey}">⚠️ 重複發票</span>` : '';
   const attrLabel = r.attribution==='project' ? (proj?proj.name:'未選') : r.attribution==='dept' ? r.dept : '其他';
 
   return `<div class="rc sel" id="rc-${r.id}">
@@ -1102,7 +1138,7 @@ function rcHTML(r) {
       <div style="min-width:0">
         <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.vendor}</div>
         <div style="font-size:11px;color:var(--muted)">${r.source}${r.idx>0?' [第'+r.idx+'張]':''} · ${r.date}</div>
-        <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${catBadge}</div>
+        <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${catBadge}${dupBadge}</div>
       </div>
       <div style="text-align:center;min-width:80px;font-size:12px">
         <div style="color:var(--muted);font-size:10px">歸屬</div>
@@ -1229,7 +1265,107 @@ function updateStats() {
 }
 
 // ════════════════════════════════════════════════════════════
-// EXPORT GROUPS
+// DUPLICATE INVOICE RESOLUTION
+// ════════════════════════════════════════════════════════════
+let _dupQueue   = [];   // 待處理的重複發票 receipt 陣列
+let _dupCurrent = null; // 目前正在處理的 receipt
+
+function startDupResolution(dupItems) {
+  _dupQueue   = [...dupItems];
+  _dupCurrent = null;
+  nextDup();
+}
+
+function nextDup() {
+  if (!_dupQueue.length) {
+    // 全部處理完
+    closeModal('dupModal');
+    document.getElementById('ocrDoneBar').style.cssText = 'display:flex;margin-top:12px;gap:8px';
+    toast(`✅ 辨識完成：共 ${S.receipts.length} 張憑證`);
+    return;
+  }
+  _dupCurrent = _dupQueue.shift();
+  renderDupModal(_dupCurrent);
+  openModal('dupModal');
+}
+
+function renderDupModal(r) {
+  const remaining = _dupQueue.length; // 還剩幾筆待確認
+  document.getElementById('dupModalBody').innerHTML = `
+    <div style="background:var(--surface2);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div class="info-row">
+        <span style="color:var(--muted)">廠商</span>
+        <span style="font-weight:700">${r.vendor}</span>
+      </div>
+      <div class="info-row">
+        <span style="color:var(--muted)">金額</span>
+        <span class="mono" style="color:var(--gold);font-weight:700">$${r.amount.toLocaleString()}</span>
+      </div>
+      <div class="info-row">
+        <span style="color:var(--muted)">日期</span>
+        <span>${r.date || '—'}</span>
+      </div>
+      <div class="info-row" style="border-bottom:none">
+        <span style="color:var(--muted)">發票號碼</span>
+        <span class="mono" style="color:var(--amber);font-weight:700">${r._duplicateOfKey}</span>
+      </div>
+    </div>
+    <div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:8px;padding:12px;font-size:12px;line-height:1.8">
+      <div style="color:var(--red);font-weight:700;margin-bottom:4px">⚠️ 此發票號碼已存在於 OcrResults</div>
+      <div style="color:var(--muted)">目前暫存 Key：<span class="mono" style="color:var(--text)">${r._tempKey}</span></div>
+      <div style="color:var(--muted);margin-top:2px">請確認是否為同一張發票（覆蓋），或是辨識錯誤（保留流水號）</div>
+    </div>`;
+  document.getElementById('dupRemaining').textContent =
+    remaining > 0 ? `還有 ${remaining} 筆待確認` : '這是最後一筆';
+}
+
+async function resolveDup(action) {
+  if (!_dupCurrent) return;
+  const r = _dupCurrent;
+
+  // 鎖定按鈕
+  ['btnDupOverwrite','btnDupKeep'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = true;
+  });
+
+  try {
+    const res = await callGAS({
+      action:    'resolveDuplicate',
+      tempKey:   r._tempKey,
+      invoiceNo: r._duplicateOfKey,
+      resolve:   action,   // 'overwrite' | 'keepSerial'
+    });
+
+    if (res.success) {
+      const finalKey = res.finalKey;
+      // 更新前端 receipt 的 ocrKey
+      const rec = S.receipts.find(x => x.id === r.id);
+      if (rec) {
+        rec.ocrKey      = finalKey;
+        rec._isDuplicate = false;
+        // 若覆蓋，前端顯示發票號碼也改回原始值
+        if (action === 'overwrite') rec.invoiceNo = r._duplicateOfKey;
+        // 重新渲染這張卡片
+        const el = document.getElementById('rc-' + rec.id);
+        if (el) { el.outerHTML = rcHTML(rec); }
+      }
+    } else {
+      toast('❌ 處理失敗：' + (res.error || '未知'));
+    }
+  } catch(e) {
+    toast('❌ 連線失敗：' + e.message);
+  }
+
+  ['btnDupOverwrite','btnDupKeep'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = false;
+  });
+
+  nextDup(); // 繼續下一筆
+}
+
+// ════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════
 function refreshExport() {
   updateStats();
@@ -1465,6 +1601,7 @@ function nav(name) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelector(`.nav-item[data-page="${name}"]`)?.classList.add('active');
   if (name==='export') refreshExport();
+  if (name==='ocr' && S.receipts.length === 0) loadOcrResults(true);
   // 手機版切頁後關閉 sidebar
   document.getElementById('mainSidebar')?.classList.remove('open');
   document.getElementById('sidebarOverlay')?.classList.remove('open');
@@ -1594,51 +1731,78 @@ async function doStashAll() {
 }
 
 // ════════════════════════════════════════════════════════════
-// LOAD OCR RESULTS FROM SHEET — 從 OcrResults 抓資料顯示
+// LOAD OCR RESULTS FROM SHEET
+//   auto=true  → 靜默載入（頁面切換時自動呼叫，失敗不 toast）
+//   auto=false → 手動載入（按鈕觸發，顯示完整回饋訊息）
 // ════════════════════════════════════════════════════════════
-async function loadOcrResults() {
+async function loadOcrResults(auto = false) {
   const btn = document.getElementById('btnLoadOcr');
   if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spin"></div> 載入中...'; }
-  const res = await callGAS({ action: 'getOcrResults' });
-  if (btn) { btn.disabled = false; btn.innerHTML = '📥 從 Sheet 載入已確認紀錄'; }
 
-  if (!res.success) { toast('❌ 載入失敗：' + (res.error || '未知')); return; }
+  let res;
+  try {
+    res = await callGAS({ action: 'getOcrResults' });
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '📥 從 Sheet 載入'; }
+    if (!auto) toast('❌ 載入失敗：' + e.message);
+    return;
+  }
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '📥 從 Sheet 載入'; }
+
+  if (!res.success) {
+    if (!auto) toast('❌ 載入失敗：' + (res.error || '未知'));
+    return;
+  }
+
   const rows = res.rows || [];
-  if (!rows.length) { toast('ℹ️ OcrResults 無紀錄（或全部已標記刪除）'); return; }
+  if (!rows.length) {
+    if (!auto) toast('ℹ️ OcrResults 無紀錄（或全部已標記刪除）');
+    return;
+  }
 
   // 合併到 S.receipts（以 key 去重）
   const existKeys = new Set(S.receipts.map(r => r.ocrKey || r.invoiceNo || r.id));
   let added = 0;
-  rows.forEach((row, idx) => {
+  rows.forEach(row => {
     if (existKeys.has(row.key)) return;
     existKeys.add(row.key);
-    const id = 'sheet_' + row.key;
-    const rec = {
-      id,
-      source: row.fileName || '（Sheet）',
-      idx: 0,
-      status: 'done',
-      category: /停車|parking/i.test(row.category) ? 'parking' : 'other',
-      attribution: row.attribution || 'project',
-      projectId: row.attribution === 'project' ? (row.attributionTarget || '') : '',
-      dept: row.attribution === 'dept' ? (row.attributionTarget || '') : (S.user?.dept || ''),
-      vendor:    row.vendor    || '',
-      amount:    parseFloat(row.amount  || 0),
-      date:      row.date      || '',
-      invoiceNo: row.invoiceNo || '',
-      ocrKey:    row.key       || '',
-      notes:     row.notes     || '',
-      error:     null,
-      editData:  { startPoint:'', endPoint:'', km:'', reason:'', isRoundTrip:true }
-    };
-    S.receipts.push(rec);
+    S.receipts.push({
+      id:           'sheet_' + row.key,
+      source:       row.fileName || '（Sheet）',
+      idx:          0,
+      status:       'done',
+      category:     /停車|parking/i.test(row.category) ? 'parking' : 'other',
+      attribution:  row.attribution || 'project',
+      projectId:    row.attribution === 'project' ? (row.attributionTarget || '') : '',
+      dept:         row.attribution === 'dept'    ? (row.attributionTarget || '') : (S.user?.dept || ''),
+      vendor:       row.vendor    || '',
+      amount:       parseFloat(row.amount  || 0),
+      date:         row.date      || '',
+      invoiceNo:    row.invoiceNo || '',
+      ocrKey:       row.key       || '',
+      notes:        row.notes     || '',
+      error:        null,
+      _isDuplicate: false, _duplicateOfKey: '', _tempKey: '',
+      editData:     { startPoint:'', endPoint:'', km:'', reason:'', isRoundTrip:true },
+    });
     added++;
   });
 
   renderOCRResults();
   updateStats();
-  nav('ocr');
-  toast(`✅ 載入 ${added} 筆（共 ${rows.length} 筆，已過濾重複）`);
+
+  if (added > 0) {
+    setStep(3);
+    document.getElementById('ocrDoneBar').style.cssText = 'display:flex;margin-top:12px;gap:8px';
+  }
+
+  if (!auto) {
+    nav('ocr');
+    toast(`✅ 載入 ${added} 筆（共 ${rows.length} 筆，已過濾重複）`);
+  } else if (added > 0) {
+    toast(`📥 已從 Sheet 載入 ${added} 筆歷史紀錄`);
+  }
 }
 
 // ════════════════════════════════════════════════════════════
