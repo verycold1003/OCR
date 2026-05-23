@@ -1093,7 +1093,6 @@ function rcHTML(r) {
     : '<option value="" disabled>尚無部門資料</option>';
 
   const catBadge  = r.category==='parking' ? `<span class="badge bd-orange">🅿️ 停車費</span>` : `<span class="badge bd-blue">📄 其他</span>`;
-  const statBadge = r.status==='done' ? `<span class="badge bd-green">✅ 完成</span>` : `<span class="badge bd-red">❌ ${r.error||'失敗'}</span>`;
   const attrLabel = r.attribution==='project' ? (proj?proj.name:'未選') : r.attribution==='dept' ? r.dept : '其他';
 
   return `<div class="rc sel" id="rc-${r.id}">
@@ -1103,7 +1102,7 @@ function rcHTML(r) {
       <div style="min-width:0">
         <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.vendor}</div>
         <div style="font-size:11px;color:var(--muted)">${r.source}${r.idx>0?' [第'+r.idx+'張]':''} · ${r.date}</div>
-        <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${catBadge} ${statBadge}</div>
+        <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${catBadge}</div>
       </div>
       <div style="text-align:center;min-width:80px;font-size:12px">
         <div style="color:var(--muted);font-size:10px">歸屬</div>
