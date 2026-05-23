@@ -900,10 +900,10 @@ async function runOCR() {
       let b64 = qf.dataUrl || '';
       if (!b64 && qf.id && !qf.id.startsWith('sim_')) {
         const fr = await callGAS({ action:'getFileBase64', fileId:qf.id });
-        b64 = fr.base64 || 'DEMO';
+        b64 = fr.base64;
       }
-      const res = await callGAS({ action:'ocrReceipt', fileName:qf.name, mimeType:qf.mimeType||'image/jpeg', base64:b64||'DEMO', fileId:qf.id });
-      const items = (res.success && res.items) ? res.items : demoItems(qf.name);
+      const res = await callGAS({ action:'ocrReceipt', fileName:qf.name, mimeType:qf.mimeType||'image/jpeg', base64:b64, fileId:qf.id });
+      const items = (res.success && res.items) ? res.items;
       items.forEach((item, idx) => {
         const id = `${qf.id}_${idx}`;
         if (!S.receipts.find(r => r.id===id))
@@ -925,13 +925,6 @@ async function runOCR() {
   toast(`✅ 辨識完成：共 ${S.receipts.length} 張憑證`);
 }
 
-function demoItems(name) {
-  const isP = /park|停/i.test(name);
-  return isP
-    ? [{ vendor:'台南市立停車場', amount:60,   date:today(), invoiceNo:'PK-00001', notes:'停車費',  category:'parking' }]
-    : [{ vendor:'全家便利商店',   amount:156,  date:today(), invoiceNo:'AB-12345678', notes:'辦公用品', category:'other' },
-       { vendor:'台灣中油',       amount:1200, date:today(), invoiceNo:'OL-87654321', notes:'油費',    category:'other' }];
-}
 
 function mkReceipt(id, qf, item, idx) {
   return {
