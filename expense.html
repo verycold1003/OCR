@@ -415,8 +415,9 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
           </div>
 
           <div id="ocrResults"></div>
-          <div id="ocrDoneBar" style="display:none;margin-top:12px">
+          <div id="ocrDoneBar" style="display:none;margin-top:12px;gap:8px">
             <button class="btn btn-primary" onclick="nav('export')">📄 前往整理匯出 →</button>
+            <button class="btn btn-gold" onclick="doStashSelected()">💾 暫存勾選</button>
           </div>
         </div>
 
@@ -462,6 +463,7 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
               </div>
               <div class="frow"><label class="lbl">申請月份</label><input type="month" class="inp" id="exp-month"></div>
               <button class="btn btn-primary btn-full" onclick="doExportAll()">✅ 全部匯出 PDF</button>
+              <button class="btn btn-gold btn-full" id="btnStash" onclick="doStashSelected()">💾 暫存勾選</button>
               <button class="btn btn-ghost btn-full" onclick="refreshExport()">🔄 重新整理分群</button>
             </div>
           </div>
@@ -871,10 +873,14 @@ function sendToOCR() {
 // ════════════════════════════════════════════════════════════
 function addQueue(file) {
   if (S.ocrQueue.find(q => q.id === file.id)) { toast('已在佇列'); return; }
-  S.ocrQueue.push({ ...file, status:'pending' });
+  S.ocrQueue.push({ ...file, status:'pending', qAttribution:'project' });
   renderQueue();
   document.getElementById('btnOCR').disabled = false;
   badge('nb-ocr', S.ocrQueue.length);
+}
+
+function setQueueAttribution(i, val) {
+  if (S.ocrQueue[i]) S.ocrQueue[i].qAttribution = val;
 }
 
 function renderQueue() {
@@ -883,13 +889,37 @@ function renderQueue() {
   if (!S.ocrQueue.length) {
     c.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:13px">佇列為空</div>'; return;
   }
+  // 歸屬類型選項：專案清單 + 部門清單 + 其他
+  function qAttrOpts(f) {
+    let opts = `<option value="project">🗂 專案</option>`;
+    if (S.config.projects.length) {
+      S.config.projects.forEach(p => {
+        const sel = f.qAttribution === 'proj:' + p.id ? 'selected' : '';
+        opts += `<option value="proj:${p.id}" ${sel}>${p.name}</option>`;
+      });
+    }
+    if (S.config.departments.length) {
+      S.config.departments.forEach(d => {
+        const sel = f.qAttribution === 'dept:' + d ? 'selected' : '';
+        opts += `<option value="dept:${d}" ${sel}>🏢 ${d}</option>`;
+      });
+    }
+    opts += `<option value="other" ${f.qAttribution==='other'?'selected':''}>📋 其他</option>`;
+    return opts;
+  }
+
   c.innerHTML = S.ocrQueue.map((f,i) => `
-    <div class="file-item">
+    <div class="file-item" style="flex-wrap:wrap;gap:8px">
       <div style="font-size:20px">${f.mimeType==='application/pdf'?'📄':'🖼️'}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</div>
         <span class="badge ${f.status==='done'?'bd-green':f.status==='error'?'bd-red':'bd-muted'}">${
           f.status==='done'?'✅ 完成':f.status==='error'?'❌ 失敗':'⏳ 待辨識'}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+        <label class="lbl" style="margin:0;white-space:nowrap">此檔歸屬</label>
+        <select class="inp" style="min-width:130px;padding:4px 24px 4px 8px;font-size:12px"
+          onchange="setQueueAttribution(${i},this.value)">${qAttrOpts(f)}</select>
       </div>
       <button class="btn btn-danger btn-sm" onclick="removeQueue(${i})">✕</button>
     </div>`).join('');
@@ -913,6 +943,13 @@ async function runOCR() {
     const qf = pending[i];
     txt.textContent=`${i+1}/${pending.length}`; bar.style.width=`${(i/pending.length)*100}%`; fl.textContent=qf.name;
 
+    // 解析 qAttribution → attribution / attributionTarget
+    const qa = qf.qAttribution || 'project';
+    let attribution = 'project', attributionTarget = '';
+    if (qa.startsWith('proj:'))      { attribution = 'project'; attributionTarget = qa.slice(5); }
+    else if (qa.startsWith('dept:')) { attribution = 'dept';    attributionTarget = qa.slice(5); }
+    else if (qa === 'other')         { attribution = 'other';   attributionTarget = ''; }
+
     try {
       let b64      = qf.dataUrl || '';
       let mimeType = qf.mimeType || 'image/jpeg';
@@ -928,20 +965,29 @@ async function runOCR() {
         fileName: qf.name,
         mimeType,
         base64: b64,
-        fileId: qf.id
+        fileId: qf.id,
+        attribution,
+        attributionTarget,
       });
       const items = res.items || [];
       items.forEach((item, idx) => {
         const id = `${qf.id}_${idx}`;
-        if (!S.receipts.find(r => r.id===id))
-          S.receipts.push(mkReceipt(id, qf, item, idx));
+        if (!S.receipts.find(r => r.id===id)) {
+          const rec = mkReceipt(id, qf, item, idx);
+          // 套用佇列指定的歸屬
+          rec.attribution = attribution;
+          if (attribution === 'project') rec.projectId = attributionTarget;
+          else if (attribution === 'dept') rec.dept = attributionTarget;
+          S.receipts.push(rec);
+        }
       });
       qf.status = res.success ? 'done' : 'error';
       if (!res.success) {
         S.receipts.push({
           id: qf.id+'_err', source: qf.name, status:'error',
           error: res.error || '辨識失敗', category:'other',
-          attribution:'project', projectId:'', dept: S.user?.dept||'',
+          attribution, projectId: attribution==='project'?attributionTarget:'',
+          dept: attribution==='dept'?attributionTarget:(S.user?.dept||''),
           vendor:'辨識失敗', amount:0, date:'', invoiceNo:'', notes:'', editData:{}
         });
       }
@@ -954,14 +1000,17 @@ async function runOCR() {
         vendor:'辨識失敗', amount:0, date:'', invoiceNo:'', notes:'', editData:{}
       });
     }
+
+    // ── 每一個 file 辨識完就立即渲染結果 ──
     renderQueue();
+    renderOCRResults();
+    updateStats();
   }
   bar.style.width='100%'; fl.textContent='✅ 全部完成';
   setStep(3);
   setBtnLoading('btnOCR', false, '▶ 開始辨識');
-  renderOCRResults();
   updateStats();
-  document.getElementById('ocrDoneBar').style.display='block';
+  document.getElementById('ocrDoneBar').style.cssText='display:flex;margin-top:12px;gap:8px';
   toast(`✅ 辨識完成：共 ${S.receipts.length} 張憑證`);
 }
 
@@ -976,6 +1025,7 @@ function mkReceipt(id, qf, item, idx) {
     amount:    parseFloat(item.amount || item.total || 0),
     date:      item.date || '',
     invoiceNo: item.invoiceNo || '',
+    ocrKey:    item.key || '',
     notes:     item.notes || '',
     error:     null,
     editData:{ startPoint:'', endPoint:'', km:'', reason:'', isRoundTrip:true }
@@ -991,7 +1041,14 @@ function detectCat(item) {
 // ════════════════════════════════════════════════════════════
 function renderOCRResults() {
   const c = document.getElementById('ocrResults');
-  c.innerHTML = S.receipts.map(r => rcHTML(r)).join('');
+  // incremental: 只 append 尚未渲染的 receipt
+  S.receipts.forEach(r => {
+    if (!document.getElementById('rc-'+r.id)) {
+      const div = document.createElement('div');
+      div.innerHTML = rcHTML(r);
+      c.appendChild(div.firstElementChild);
+    }
+  });
   badge('nb-ocr', S.receipts.length);
 }
 
@@ -1475,7 +1532,35 @@ function calcAtt2(pid) {
 }
 
 // ════════════════════════════════════════════════════════════
-// UTILS
+// STASH SELECTED — 回寫 OcrResults（歸屬類型、歸屬專案/部門、已確認）
+// ════════════════════════════════════════════════════════════
+async function doStashSelected() {
+  // 收集勾選中的 receipts
+  const selected = S.receipts.filter(r => document.getElementById('rck-'+r.id)?.classList.contains('on'));
+  if (!selected.length) { toast('⚠️ 請先勾選要暫存的憑證'); return; }
+
+  const updates = selected.map(r => {
+    let attribution = r.attribution || 'project';
+    let attributionTarget = '';
+    if (attribution === 'project') attributionTarget = r.projectId || '';
+    else if (attribution === 'dept') attributionTarget = r.dept || '';
+
+    // key：有發票號碼用發票號碼，否則後端已用年月+序號，前端直接用 r.invoiceNo 或 r.id
+    const key = r.invoiceNo && r.invoiceNo.trim() ? r.invoiceNo.trim() : (r.ocrKey || r.id);
+    return { key, attribution, attributionTarget };
+  });
+
+  setBtnLoading('btnStash', true, '暫存中...');
+  const res = await callGAS({ action:'stashSelected', updates });
+  setBtnLoading('btnStash', false, '💾 暫存勾選');
+
+  if (res.success) {
+    toast(`✅ 已暫存 ${res.updated} 筆至 OcrResults`);
+  } else {
+    toast('❌ 暫存失敗：' + (res.error || '未知'));
+  }
+}
+
 // ════════════════════════════════════════════════════════════
 async function callGAS(payload) {
   try {
