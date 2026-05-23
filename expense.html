@@ -516,6 +516,11 @@ const S = {
   driveFiles: [],
   ocrQueue: [],
   receipts: [],
+  // 每個 file (by queue index id) 的歸屬設定
+  fileAttribution: {},  // fileId → { attribution:'project'|'dept'|'other', target:'' }
+  // 流水序號（年月+序號用）
+  ocrSeq: 0,
+  ocrYM: '',
 };
 
 // pending Maps query context
@@ -907,6 +912,10 @@ function sendToOCR() {
 // ════════════════════════════════════════════════════════════
 function addQueue(file) {
   if (S.ocrQueue.find(q => q.id === file.id)) { toast('已在佇列'); return; }
+  // 初始化此 file 的歸屬設定（預設：專案，target 空）
+  if (!S.fileAttribution[file.id]) {
+    S.fileAttribution[file.id] = { attribution: 'project', target: '' };
+  }
   S.ocrQueue.push({ ...file, status:'pending' });
   renderQueue();
   document.getElementById('btnOCR').disabled = false;
@@ -919,24 +928,90 @@ function renderQueue() {
   if (!S.ocrQueue.length) {
     c.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:13px">佇列為空</div>'; return;
   }
-  c.innerHTML = S.ocrQueue.map((f,i) => `
-    <div class="file-item">
-      <div style="font-size:20px">${f.mimeType==='application/pdf'?'📄':'🖼️'}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</div>
-        <span class="badge ${f.status==='done'?'bd-green':f.status==='error'?'bd-red':'bd-muted'}">${
-          f.status==='done'?'✅ 完成':f.status==='error'?'❌ 失敗':'⏳ 待辨識'}</span>
+
+  const projOpts = S.config.projects.length
+    ? S.config.projects.map(p => `<option value="proj:${p.id}">${p.name}</option>`).join('')
+    : '<option value="" disabled>尚無生效專案</option>';
+  const deptOpts = S.config.departments.length
+    ? S.config.departments.map(d => `<option value="dept:${d}">${d}</option>`).join('')
+    : '';
+
+  c.innerHTML = S.ocrQueue.map((f,i) => {
+    const fa    = S.fileAttribution[f.id] || { attribution:'project', target:'' };
+    const isProj = fa.attribution==='project';
+    const isDept = fa.attribution==='dept';
+    const selVal = isProj ? ('proj:' + fa.target) : isDept ? ('dept:' + fa.target) : 'other';
+    const statusBadge = f.status==='done'
+      ? `<span class="badge bd-green">✅ 完成</span>`
+      : f.status==='error'
+        ? `<span class="badge bd-red">❌ 失敗</span>`
+        : `<span class="badge bd-muted">⏳ 待辨識</span>`;
+
+    return `<div class="file-item" style="flex-direction:column;align-items:stretch;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:20px">${f.mimeType==='application/pdf'?'📄':'🖼️'}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</div>
+          <div style="margin-top:4px">${statusBadge}</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="removeQueue(${i})">✕</button>
       </div>
-      <button class="btn btn-danger btn-sm" onclick="removeQueue(${i})">✕</button>
-    </div>`).join('');
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap">此檔歸屬：</span>
+        <select class="inp" style="flex:1;min-width:160px;font-size:12px;padding:5px 8px" onchange="setFileAttribution('${f.id}',this.value)">
+          <option value="other" ${selVal==='other'?'selected':''}>📋 其他</option>
+          <optgroup label="🗂 專案">${projOpts.replace(/(<option[^>]*)value="proj:([^"]*)"/, '$1value="proj:$2"')}</optgroup>
+          ${deptOpts ? `<optgroup label="🏢 部門">${deptOpts.replace(/(<option[^>]*)value="dept:([^"]*)"/, '$1value="dept:$2"')}</optgroup>` : ''}
+        </select>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Set correct selected values
+  S.ocrQueue.forEach(f => {
+    const fa  = S.fileAttribution[f.id] || { attribution:'project', target:'' };
+    const sel = c.querySelector(`select[onchange*="'${f.id}'"]`);
+    if (!sel) return;
+    const val = fa.attribution==='project' ? 'proj:'+fa.target
+              : fa.attribution==='dept'    ? 'dept:'+fa.target
+              : 'other';
+    // find and set the matching option
+    Array.from(sel.options).forEach(o => { if(o.value===val) o.selected=true; });
+  });
 }
 
-function removeQueue(i) { S.ocrQueue.splice(i,1); renderQueue(); badge('nb-ocr', S.ocrQueue.length); }
-function clearQueue()    { S.ocrQueue=[]; renderQueue(); badge('nb-ocr',0); document.getElementById('btnOCR').disabled=true; }
+function setFileAttribution(fileId, value) {
+  let attribution = 'other', target = '';
+  if (value.startsWith('proj:')) { attribution = 'project'; target = value.slice(5); }
+  else if (value.startsWith('dept:')) { attribution = 'dept'; target = value.slice(5); }
+  S.fileAttribution[fileId] = { attribution, target };
+}
+
+
+function clearQueue() {
+  S.ocrQueue=[];
+  renderQueue();
+  badge('nb-ocr', 0);
+  document.getElementById('btnOCR').disabled=true;
+  toast('⚠️ 辨識佇列已清空（辨識結果保留）');
+}
 
 // ════════════════════════════════════════════════════════════
 // RUN OCR
 // ════════════════════════════════════════════════════════════
+// 生成 key（發票號碼優先，否則年月+流水序號）
+function genReceiptKey(invoiceNo) {
+  const ym = new Date().toISOString().slice(0,7).replace('-','');
+  if (S.ocrYM !== ym) { S.ocrYM = ym; S.ocrSeq = 0; }
+  if (invoiceNo && invoiceNo.trim()) return invoiceNo.trim();
+  S.ocrSeq++;
+  // avoid collisions with existing keys
+  const existKeys = new Set(S.receipts.map(r => r.key));
+  let k = ym + '-' + String(S.ocrSeq).padStart(3, '0');
+  while (existKeys.has(k)) { S.ocrSeq++; k = ym + '-' + String(S.ocrSeq).padStart(3, '0'); }
+  return k;
+}
+
 async function runOCR() {
   const pending = S.ocrQueue.filter(q => q.status==='pending');
   if (!pending.length) { toast('沒有待辨識項目'); return; }
@@ -948,6 +1023,8 @@ async function runOCR() {
   for (let i=0; i<pending.length; i++) {
     const qf = pending[i];
     txt.textContent=`${i+1}/${pending.length}`; bar.style.width=`${(i/pending.length)*100}%`; fl.textContent=qf.name;
+
+    const fa = S.fileAttribution[qf.id] || { attribution:'project', target:'' };
 
     try {
       // Fetch base64 from Drive via GAS if no local data
@@ -965,57 +1042,86 @@ async function runOCR() {
         fileName: qf.name,
         mimeType,
         base64: b64,
-        fileId: qf.id
+        fileId: qf.id,
+        attribution: fa.attribution,
+        attributionTarget: fa.target,
       });
       const items = res.items || [];
-      items.forEach((item, idx) => {
-        const id = `${qf.id}_${idx}`;
-        if (!S.receipts.find(r => r.id===id))
-          S.receipts.push(mkReceipt(id, qf, item, idx));
+      const newReceipts = [];
+      items.forEach((item) => {
+        const key = genReceiptKey(item.invoiceNo);
+        if (!S.receipts.find(r => r.key === key)) {
+          const r = mkReceipt(key, qf, item, fa);
+          S.receipts.push(r);
+          newReceipts.push(r);
+        }
       });
       qf.status = res.success ? 'done' : 'error';
       if (!res.success) {
-        S.receipts.push({
-          id: qf.id+'_err', source: qf.name, status:'error',
-          error: res.error || '辨識失敗', category:'other',
-          attribution:'project', projectId:'', dept: S.user?.dept||'',
-          vendor:'辨識失敗', amount:0, date:'', invoiceNo:'', notes:'', editData:{}
-        });
+        const key = genReceiptKey('');
+        const errR = mkErrorReceipt(key, qf, res.error, fa);
+        S.receipts.push(errR);
+        newReceipts.push(errR);
       }
+      // ── 辨識完一個 file 立即追加顯示 ──
+      appendOCRResults(qf.id, newReceipts);
     } catch(e) {
       qf.status='error';
-      S.receipts.push({
-        id: qf.id+'_err', source: qf.name, status:'error',
-        error: e.message, category:'other',
-        attribution:'project', projectId:'', dept: S.user?.dept||'',
-        vendor:'辨識失敗', amount:0, date:'', invoiceNo:'', notes:'', editData:{}
-      });
+      const key = genReceiptKey('');
+      const errR = mkErrorReceipt(key, qf, e.message, fa);
+      S.receipts.push(errR);
+      appendOCRResults(qf.id, [errR]);
     }
     renderQueue();
+    updateStats();
   }
   bar.style.width='100%'; fl.textContent='✅ 全部完成';
   setStep(3);
   setBtnLoading('btnOCR', false, '▶ 開始辨識');
-  renderOCRResults();
   updateStats();
   document.getElementById('ocrDoneBar').style.display='block';
   toast(`✅ 辨識完成：共 ${S.receipts.length} 張憑證`);
 }
 
-function mkReceipt(id, qf, item, idx) {
+function mkReceipt(key, qf, item, fa) {
+  const attr = fa || { attribution:'project', target:'' };
   return {
-    id, source:qf.name, idx,
+    key,
+    id: key,   // keep id alias for backward compat
+    source: qf.name,
+    sourceFileId: qf.id,
     status:'done',
+    confirmed: false,
     category: detectCat(item),
-    attribution:'project',
-    projectId:'', dept: S.user?.dept||'',
-    vendor:  item.vendor || item.merchant || '（未辨識）',
-    amount:  parseFloat(item.amount || item.total || 0),
-    date:    item.date || '',
+    attribution: attr.attribution,
+    projectId: attr.attribution==='project' ? attr.target : '',
+    dept: attr.attribution==='dept' ? attr.target : (S.user?.dept||''),
+    vendor:    item.vendor || item.merchant || '（未辨識）',
+    amount:    parseFloat(item.amount || item.total || 0),
+    date:      item.date || '',
     invoiceNo: item.invoiceNo || '',
-    notes:   item.notes || '',
-    error:   null,
-    editData:{ startPoint:'', endPoint:'', km:'', reason:'', isRoundTrip:true }
+    notes:     item.notes || '',
+    error:     null,
+    editData:  { startPoint:'', endPoint:'', km:'', reason:'', isRoundTrip:true }
+  };
+}
+
+function mkErrorReceipt(key, qf, errMsg, fa) {
+  const attr = fa || { attribution:'project', target:'' };
+  return {
+    key,
+    id: key,
+    source: qf.name,
+    sourceFileId: qf.id,
+    status:'error',
+    confirmed: false,
+    error: errMsg || '辨識失敗',
+    category:'other',
+    attribution: attr.attribution,
+    projectId: attr.attribution==='project' ? attr.target : '',
+    dept: attr.attribution==='dept' ? attr.target : (S.user?.dept||''),
+    vendor:'辨識失敗', amount:0, date:'', invoiceNo:'', notes:'',
+    editData:{}
   };
 }
 
@@ -1028,11 +1134,132 @@ function detectCat(item) {
 // ════════════════════════════════════════════════════════════
 function renderOCRResults() {
   const c = document.getElementById('ocrResults');
-  c.innerHTML = S.receipts.map(r => rcHTML(r)).join('');
+  // 依來源 file 分群顯示
+  const groups = groupReceiptsByFile(S.receipts);
+  c.innerHTML = '';
+  groups.forEach(g => {
+    const sec = buildFileSection(g.fileId, g.fileName, g.receipts);
+    c.appendChild(sec);
+  });
   badge('nb-ocr', S.receipts.length);
 }
 
+// 逐筆追加（OCR 辨識完一個 file 後即時呼叫）
+function appendOCRResults(fileId, newReceipts) {
+  if (!newReceipts.length) return;
+  const c = document.getElementById('ocrResults');
+  const fileName = newReceipts[0].source;
+
+  // 檢查是否已有此 file 的 section
+  let sec = document.getElementById('ocrSec-'+CSS.escape(fileId));
+  if (!sec) {
+    sec = buildFileSection(fileId, fileName, newReceipts);
+    c.appendChild(sec);
+  } else {
+    // 只追加新發票卡片
+    const body = document.getElementById('ocrSecBody-'+CSS.escape(fileId));
+    if (body) {
+      newReceipts.forEach(r => {
+        body.insertAdjacentHTML('beforeend', rcHTML(r));
+      });
+    }
+    // 更新計數
+    updateFileSectionMeta(fileId);
+  }
+  badge('nb-ocr', S.receipts.length);
+}
+
+// 建立一個 file 的 section 區塊（含「全部暫存」勾選）
+function buildFileSection(fileId, fileName, receipts) {
+  const div = document.createElement('div');
+  div.id = 'ocrSec-' + fileId;
+  div.className = 'exp-sec';
+  div.style.marginBottom = '16px';
+
+  const total = receipts.reduce((s,r) => s+r.amount, 0);
+  const confirmedAll = receipts.length && receipts.every(r => r.confirmed);
+
+  div.innerHTML = `
+    <div class="exp-sec-hd" style="cursor:default">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1">
+        <span style="font-size:13px;font-weight:700">🖼️ ${fileName}</span>
+        <span class="badge bd-muted" id="ocrSecCnt-${CSS.escape(fileId)}">${receipts.length} 張</span>
+        <span class="mono" style="font-size:12px;color:var(--gold)" id="ocrSecAmt-${CSS.escape(fileId)}">$${total.toLocaleString()}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap">
+          <div class="chkbox ${confirmedAll?'on':''}" id="ocrSecChk-${CSS.escape(fileId)}"
+               onclick="toggleFileAllConfirm('${fileId}',this)"></div>
+          全部暫存
+        </label>
+        <button class="btn btn-green btn-sm" onclick="stashFileAll('${fileId}')">✅ 全部暫存</button>
+      </div>
+    </div>
+    <div class="exp-sec-bd open" id="ocrSecBody-${CSS.escape(fileId)}">
+      ${receipts.map(r => rcHTML(r)).join('')}
+    </div>`;
+  return div;
+}
+
+function groupReceiptsByFile(receipts) {
+  const order = [];
+  const map   = {};
+  receipts.forEach(r => {
+    const fid = r.sourceFileId || 'unknown';
+    if (!map[fid]) { map[fid]=[]; order.push(fid); }
+    map[fid].push(r);
+  });
+  return order.map(fid => ({ fileId:fid, fileName:map[fid][0].source, receipts:map[fid] }));
+}
+
+function updateFileSectionMeta(fileId) {
+  const rs = S.receipts.filter(r => r.sourceFileId===fileId);
+  const total = rs.reduce((s,r)=>s+r.amount,0);
+  const cntEl = document.getElementById('ocrSecCnt-'+CSS.escape(fileId));
+  const amtEl = document.getElementById('ocrSecAmt-'+CSS.escape(fileId));
+  if (cntEl) cntEl.textContent = rs.length + ' 張';
+  if (amtEl) amtEl.textContent = '$' + total.toLocaleString();
+}
+
+// 單張發票暫存
+function stashReceipt(key) {
+  const r = S.receipts.find(x => x.key===key);
+  if (!r) return;
+  r.confirmed = true;
+  const el = document.getElementById('rc-stash-'+CSS.escape(key));
+  if (el) { el.classList.add('bd-green'); el.innerHTML='✅ 已暫存'; el.disabled=true; }
+  // 更新 section 勾選狀態
+  updateFileSectionChk(r.sourceFileId);
+  toast('✅ 已暫存：' + r.vendor);
+}
+
+// File 全部暫存
+function stashFileAll(fileId) {
+  const rs = S.receipts.filter(r => r.sourceFileId===fileId);
+  rs.forEach(r => {
+    r.confirmed = true;
+    const el = document.getElementById('rc-stash-'+CSS.escape(r.key));
+    if (el) { el.classList.add('bd-green'); el.innerHTML='✅ 已暫存'; el.disabled=true; }
+  });
+  updateFileSectionChk(fileId);
+  toast(`✅ ${rs.length} 張已暫存`);
+}
+
+function toggleFileAllConfirm(fileId, chkEl) {
+  const toConfirm = !chkEl.classList.contains('on');
+  chkEl.classList.toggle('on', toConfirm);
+  if (toConfirm) stashFileAll(fileId);
+}
+
+function updateFileSectionChk(fileId) {
+  const rs = S.receipts.filter(r => r.sourceFileId===fileId);
+  const allDone = rs.length && rs.every(r => r.confirmed);
+  const el = document.getElementById('ocrSecChk-'+CSS.escape(fileId));
+  if (el) el.classList.toggle('on', allDone);
+}
+
 function rcHTML(r) {
+  const key  = r.key || r.id;
   const proj = S.config.projects.find(p => p.id===r.projectId);
 
   // 歸屬專案選項（來自 S.config.projects，已經過 GAS 過濾生效中專案）
@@ -1052,14 +1279,18 @@ function rcHTML(r) {
   const catBadge  = r.category==='parking' ? `<span class="badge bd-orange">🅿️ 停車費</span>` : `<span class="badge bd-blue">📄 其他</span>`;
   const statBadge = r.status==='done' ? `<span class="badge bd-green">✅ 完成</span>` : `<span class="badge bd-red">❌ ${r.error||'失敗'}</span>`;
   const attrLabel = r.attribution==='project' ? (proj?proj.name:'未選') : r.attribution==='dept' ? r.dept : '其他';
+  const stashedCls = r.confirmed ? 'bd-green' : 'bd-muted';
+  const stashedLabel = r.confirmed ? '✅ 已暫存' : '📌 暫存';
 
-  return `<div class="rc sel" id="rc-${r.id}">
-    <div class="rc-hd" onclick="toggleRC('${r.id}')">
-      <div class="chkbox on" id="rck-${r.id}" onclick="event.stopPropagation();document.getElementById('rck-${r.id}').classList.toggle('on')"></div>
+  const ek = CSS.escape(key);
+  return `<div class="rc sel" id="rc-${ek}">
+    <div class="rc-hd" onclick="toggleRC('${ek}')">
+      <div class="chkbox on" id="rck-${ek}" onclick="event.stopPropagation();document.getElementById('rck-${ek}').classList.toggle('on')"></div>
       <div class="rc-thumb">🖼️</div>
       <div style="min-width:0">
         <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.vendor}</div>
-        <div style="font-size:11px;color:var(--muted)">${r.source}${r.idx>0?' [第'+r.idx+'張]':''} · ${r.date}</div>
+        <div style="font-size:11px;color:var(--muted)">${r.source} · ${r.date}</div>
+        <div style="font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace">${key}</div>
         <div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap">${catBadge} ${statBadge}</div>
       </div>
       <div style="text-align:center;min-width:80px;font-size:12px">
@@ -1072,64 +1303,69 @@ function rcHTML(r) {
       </div>
       <div style="color:var(--muted);font-size:12px">▼</div>
     </div>
-    <div class="rc-body" id="rcb-${r.id}">
+    <div class="rc-body" id="rcb-${ek}">
       <div class="fg4" style="margin-bottom:12px">
-        <div><label class="lbl">廠商</label><input class="inp" value="${r.vendor}" onchange="upR('${r.id}','vendor',this.value)"></div>
-        <div><label class="lbl">金額</label><input type="number" class="inp" value="${r.amount}" onchange="upR('${r.id}','amount',+this.value);updateStats()"></div>
-        <div><label class="lbl">日期</label><input type="date" class="inp" value="${r.date}" onchange="upR('${r.id}','date',this.value)"></div>
-        <div><label class="lbl">發票號碼</label><input class="inp" value="${r.invoiceNo}" onchange="upR('${r.id}','invoiceNo',this.value)"></div>
+        <div><label class="lbl">廠商</label><input class="inp" value="${r.vendor}" onchange="upR('${key}','vendor',this.value)"></div>
+        <div><label class="lbl">金額</label><input type="number" class="inp" value="${r.amount}" onchange="upR('${key}','amount',+this.value);updateStats()"></div>
+        <div><label class="lbl">日期</label><input type="date" class="inp" value="${r.date}" onchange="upR('${key}','date',this.value)"></div>
+        <div><label class="lbl">發票號碼</label><input class="inp" value="${r.invoiceNo}" onchange="upR('${key}','invoiceNo',this.value)"></div>
       </div>
 
       <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
         <div>
           <label class="lbl">費用類型</label>
-          <div class="tgl" style="width:200px" id="tgl-cat-${r.id}">
-            <button class="tgl-btn ${r.category==='other'?'on':''}" onclick="setCat('${r.id}','other')">📄 其他</button>
-            <button class="tgl-btn ${r.category==='parking'?'on':''}" onclick="setCat('${r.id}','parking')">🅿️ 停車</button>
+          <div class="tgl" style="width:200px" id="tgl-cat-${ek}">
+            <button class="tgl-btn ${r.category==='other'?'on':''}" onclick="setCat('${key}','other')">📄 其他</button>
+            <button class="tgl-btn ${r.category==='parking'?'on':''}" onclick="setCat('${key}','parking')">🅿️ 停車</button>
           </div>
         </div>
         <div>
           <label class="lbl">歸屬類型</label>
-          <div class="tgl" style="width:270px" id="tgl-attr-${r.id}">
-            <button class="tgl-btn ${r.attribution==='project'?'on':''}" onclick="setAttr('${r.id}','project')">🗂 專案</button>
-            <button class="tgl-btn ${r.attribution==='dept'?'on':''}" onclick="setAttr('${r.id}','dept')">🏢 部門</button>
-            <button class="tgl-btn ${r.attribution==='other'?'on':''}" onclick="setAttr('${r.id}','other')">📋 其他</button>
+          <div class="tgl" style="width:270px" id="tgl-attr-${ek}">
+            <button class="tgl-btn ${r.attribution==='project'?'on':''}" onclick="setAttr('${key}','project')">🗂 專案</button>
+            <button class="tgl-btn ${r.attribution==='dept'?'on':''}" onclick="setAttr('${key}','dept')">🏢 部門</button>
+            <button class="tgl-btn ${r.attribution==='other'?'on':''}" onclick="setAttr('${key}','other')">📋 其他</button>
           </div>
         </div>
       </div>
 
       <div class="fg2" style="margin-bottom:12px">
-        <div id="pf-proj-${r.id}" style="${r.attribution!=='project'?'display:none':''}">
+        <div id="pf-proj-${ek}" style="${r.attribution!=='project'?'display:none':''}">
           <label class="lbl">歸屬專案</label>
-          <select class="inp" onchange="upR('${r.id}','projectId',this.value);updateStats()">
+          <select class="inp" onchange="upR('${key}','projectId',this.value);updateStats()">
             <option value="">— 選擇 —</option>${projOpts}
           </select>
         </div>
-        <div id="pf-dept-${r.id}" style="${r.attribution!=='dept'?'display:none':''}">
+        <div id="pf-dept-${ek}" style="${r.attribution!=='dept'?'display:none':''}">
           <label class="lbl">歸屬部門</label>
-          <select class="inp" onchange="upR('${r.id}','dept',this.value)">
+          <select class="inp" onchange="upR('${key}','dept',this.value)">
             <option value="">— 選擇 —</option>${deptOpts}
           </select>
         </div>
       </div>
 
-      <div style="margin-bottom:12px"><label class="lbl">備註</label><input class="inp" value="${r.notes}" onchange="upR('${r.id}','notes',this.value)"></div>
+      <div style="margin-bottom:12px"><label class="lbl">備註</label><input class="inp" value="${r.notes}" onchange="upR('${key}','notes',this.value)"></div>
 
       <div style="display:flex;gap:8px">
-        <button class="btn btn-danger btn-sm" onclick="delR('${r.id}')">🗑 刪除</button>
-        <button class="btn btn-ghost btn-sm" onclick="toggleRC('${r.id}')">收起</button>
+        <button class="btn btn-sm badge ${stashedCls}" id="rc-stash-${ek}"
+          onclick="stashReceipt('${key}')" ${r.confirmed?'disabled':''}>
+          ${stashedLabel}
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="delR('${key}')">🗑 刪除</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleRC('${ek}')">收起</button>
       </div>
     </div>
   </div>`;
 }
 
-function upR(id, k, v)   { const r=S.receipts.find(x=>x.id===id); if(r) r[k]=v; }
+function upR(key, k, v) { const r=S.receipts.find(x=>x.key===key); if(r) r[k]=v; }
 
-function setCat(id, cat) {
-  upR(id, 'category', cat);
-  const tgl = document.getElementById('tgl-cat-'+id);
+function setCat(key, cat) {
+  upR(key, 'category', cat);
+  const ek  = CSS.escape(key);
+  const tgl = document.getElementById('tgl-cat-'+ek);
   if (tgl) tgl.querySelectorAll('.tgl-btn').forEach((b,i) => b.classList.toggle('on', ['other','parking'][i]===cat));
-  const rc = document.getElementById('rc-'+id);
+  const rc = document.getElementById('rc-'+ek);
   if (rc) {
     const badgeEl = rc.querySelector('.rc-hd .badge');
     if (badgeEl) {
@@ -1140,20 +1376,29 @@ function setCat(id, cat) {
   updateStats();
 }
 
-function toggleRC(id)    { document.getElementById('rcb-'+id)?.classList.toggle('open'); }
-function delR(id)        { S.receipts=S.receipts.filter(r=>r.id!==id); document.getElementById('rc-'+id)?.remove(); updateStats(); }
+function toggleRC(ek) { document.getElementById('rcb-'+ek)?.classList.toggle('open'); }
 
-function setAttr(id, attr) {
-  upR(id,'attribution',attr);
-  const tgl = document.getElementById('tgl-attr-'+id);
+function delR(key) {
+  const r = S.receipts.find(x=>x.key===key);
+  const fileId = r?.sourceFileId;
+  S.receipts = S.receipts.filter(r=>r.key!==key);
+  document.getElementById('rc-'+CSS.escape(key))?.remove();
+  if (fileId) updateFileSectionMeta(fileId);
+  updateStats();
+}
+
+function setAttr(key, attr) {
+  upR(key,'attribution',attr);
+  const ek  = CSS.escape(key);
+  const tgl = document.getElementById('tgl-attr-'+ek);
   if (tgl) tgl.querySelectorAll('.tgl-btn').forEach((b,i) => b.classList.toggle('on', ['project','dept','other'][i]===attr));
   ['proj','dept'].forEach(t => {
-    const el = document.getElementById(`pf-${t}-${id}`);
+    const el = document.getElementById(`pf-${t}-${ek}`);
     if (el) el.style.display = (t==='proj'?attr==='project':attr==='dept') ? 'block' : 'none';
   });
-  const rc = document.getElementById('rc-'+id);
+  const rc = document.getElementById('rc-'+ek);
   if (rc) {
-    const r = S.receipts.find(x=>x.id===id);
+    const r = S.receipts.find(x=>x.key===key);
     const proj = S.config.projects.find(p=>p.id===r?.projectId);
     const attrLabel = attr==='project' ? (proj?proj.name:'未選') : attr==='dept' ? (r?.dept||'') : '其他';
     const labelDiv = rc.querySelector('.rc-hd > div[style*="text-align:center"]');
