@@ -4,7 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>雜支申請</title>
-<script src="https://cdn.jsdelivr.net/npm/heic2any/dist/heic2any.min.js"></script>
+<script>
+// heic2any 載入確認（CDN 有時較慢，doUpload 前會再檢查）
+window._heic2anyLoaded = false;
+</script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"
+  onload="window._heic2anyLoaded=true; console.log('[heic2any] 載入成功')"
+  onerror="console.warn('[heic2any] CDN 載入失敗，嘗試備用...');
+    var s=document.createElement('script');
+    s.src='https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js';
+    s.onload=function(){window._heic2anyLoaded=true;console.log('[heic2any] 備用 CDN 載入成功');};
+    document.head.appendChild(s);">
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=IBM+Plex+Mono:wght@400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <style>
@@ -719,26 +730,38 @@ function onFilePick(files) {
   document.getElementById('btnUpload').disabled = !S.pendingFiles.length;
 }
 
+function isHeicFile(f) {
+  const name = (f.name || '').toLowerCase();
+  const mime = (f.type || '').toLowerCase();
+  return mime === 'image/heic' || mime === 'image/heif' ||
+         name.endsWith('.heic') || name.endsWith('.heif');
+}
+
 function renderPendingFiles() {
   const c = document.getElementById('fileList');
   c.innerHTML = S.pendingFiles.map((f,i) => {
-    const isImg = f.type.startsWith('image/');
+    const isPdf  = (f.type === 'application/pdf') || f.name.toLowerCase().endsWith('.pdf');
+    const isHeic = isHeicFile(f);
+    const isImg  = !isPdf && !isHeic && (f.type || '').startsWith('image/');
+    const thumb  = isPdf ? '📄' : isHeic ? '🔄 HEIC' : '';
     return `<div class="file-item">
-      <div class="file-thumb" id="ft-${i}">${isImg?'':'📄'}</div>
+      <div class="file-thumb" id="ft-${i}" style="font-size:11px;color:var(--muted);text-align:center">${thumb}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</div>
-        <div style="font-size:11px;color:var(--muted)">${(f.size/1024).toFixed(1)} KB</div>
+        <div style="font-size:11px;color:var(--muted)">${(f.size/1024).toFixed(1)} KB${isHeic?' · 上傳時自動轉 JPEG':''}</div>
       </div>
       <button class="btn btn-danger btn-sm" onclick="removePending(${i})">✕</button>
     </div>`;
   }).join('');
   S.pendingFiles.forEach((f,i) => {
-    if (!f.type.startsWith('image/')) return;
+    if (isHeicFile(f)) return;          // HEIC 跳過，不用 FileReader
+    if (!(f.type||'').startsWith('image/')) return;
     const r = new FileReader();
     r.onload = e => {
       const t = document.getElementById('ft-'+i);
       if (t) t.innerHTML = `<img src="${e.target.result}" alt="">`;
     };
+    r.onerror = () => {};               // 靜默失敗
     r.readAsDataURL(f);
   });
 }
@@ -1668,37 +1691,65 @@ async function normalizeFileForUpload(file) {
     return await pdfToJpegFiles(file);
   }
 
-  const isHeic  = mime === 'image/heic' || mime === 'image/heif' ||
-                  name.endsWith('.heic') || name.endsWith('.heif');
+  const heic    = isHeicFile(file);
   const isLarge = file.size > 2 * 1024 * 1024;
 
-  if (!isHeic && !isLarge) return [file];   // 普通圖片直接回傳（包在陣列）
+  if (!heic && !isLarge) return [file];   // 普通圖片直接回傳
 
   // ── HEIC：方法一 heic2any ──
-  if (isHeic && typeof heic2any !== 'undefined') {
-    try {
-      const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
-      const blob      = Array.isArray(converted) ? converted[0] : converted;
-      const newName   = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-      toast('✅ HEIC 轉換完成：' + newName);
-      return [new File([blob], newName, { type: 'image/jpeg' })];
-    } catch (e) {
-      console.warn('[HEIC] heic2any 失敗，改用 Canvas：', e.message);
+  if (heic) {
+    console.log('[HEIC] 偵測到 HEIC 檔案，大小:', (file.size/1024).toFixed(1), 'KB', '| type:', file.type||'(空)');
+
+    if (typeof heic2any !== 'undefined') {
+      try {
+        console.log('[HEIC] 開始 heic2any 轉換...');
+        toast('⏳ HEIC 轉換中，請稍候...');
+        const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
+        const blob      = Array.isArray(converted) ? converted[0] : converted;
+        const newName   = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+        console.log('[HEIC] heic2any 成功，輸出大小:', (blob.size/1024).toFixed(1), 'KB');
+        toast('\u2705 HEIC 轉換完成：' + newName);
+        return [new File([blob], newName, { type: 'image/jpeg' })];
+      } catch (e) {
+        console.warn('[HEIC] heic2any 失敗：', e);
+        toast('⚠️ heic2any 失敗，嘗試 Canvas...');
+      }
+    } else {
+      console.warn('[HEIC] heic2any 未載入，嘗試 Canvas fallback');
+      toast('⚠️ heic2any 未載入，嘗試 Canvas...');
     }
+
+    // ── Canvas fallback（僅 Safari/iOS 支援解碼 HEIC）──
+    try {
+      console.log('[HEIC] 嘗試 Canvas fallback...');
+      const blob = await toJpegViaCanvas(file, 0.85);
+      if (blob) {
+        const newName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+        console.log('[HEIC] Canvas 成功，輸出大小:', (blob.size/1024).toFixed(1), 'KB');
+        toast('\u2705 HEIC Canvas 轉換完成：' + newName);
+        return [new File([blob], newName, { type: 'image/jpeg' })];
+      }
+    } catch (e) {
+      console.warn('[HEIC] Canvas 也失敗：', e);
+    }
+
+    // 兩種方式都失敗，原檔上傳
+    console.warn('[HEIC] 轉換全部失敗，以原 HEIC 格式上傳');
+    toast('⚠️ HEIC 轉換失敗，以原格式上傳（OCR 可能受影響）');
+    return [file];
   }
 
-  // ── Canvas fallback（HEIC iOS / 大圖壓縮）──
+  // ── 大圖壓縮 ──
   try {
-    const quality = isLarge ? 0.82 : 0.88;
-    const blob    = await toJpegViaCanvas(file, quality);
+    const blob = await toJpegViaCanvas(file, 0.82);
     if (blob) {
-      const newName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-      if (isLarge) toast('✅ 大圖壓縮完成：' + ((blob.size / 1024).toFixed(0)) + ' KB');
-      return [new File([blob], newName, { type: 'image/jpeg' })];
+      console.log('[壓縮] 大圖壓縮完成:', (blob.size/1024).toFixed(0), 'KB');
+      toast('\u2705 大圖壓縮完成：' + (blob.size/1024).toFixed(0) + ' KB');
+      return [new File([blob], file.name, { type: 'image/jpeg' })];
     }
   } catch (e) {
-    console.warn('[Canvas] 轉換失敗：', e.message);
-    toast('⚠️ ' + file.name + ' 無法轉換，以原格式上傳');
+    console.warn('[壓縮] Canvas 壓縮失敗：', e.message);
+    toast('⚠️ ' + file.name + ' 無法壓縮，以原格式上傳');
   }
 
   return [file];
