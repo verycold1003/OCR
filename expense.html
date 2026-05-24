@@ -804,7 +804,7 @@ async function doUpload() {
 
     try {
       // normalizeFileForUpload 回傳 File[]（PDF 多頁時會有多個）
-      const files = await normalizeFileForUpload(rawFile);
+      const files = await normalizeFileForUpload(rawFile, i + 1, total);
 
       for (const f of files) {
         if (files.length > 1 || f.name !== rawFile.name) {
@@ -1011,7 +1011,6 @@ async function runOCR() {
         fileName: qf.name,
         base64: b64,
         fileId: qf.id,
-        lineId: S.user?.lineId || '',
         attribution,
         attributionTarget,
       });
@@ -1849,13 +1848,13 @@ function toBase64(file) {
 }
 
 // ── 上傳前統一轉 JPEG：支援 PDF（多頁）/ 大圖壓縮；HEIC 直接原檔送 GAS ──
-async function normalizeFileForUpload(file) {
+async function normalizeFileForUpload(file, fileIdx = 1, fileTotal = 1) {
   const name = file.name.toLowerCase();
   const mime = file.type || '';
 
   // ── PDF：逐頁轉 JPEG，回傳 File 陣列 ──
   if (mime === 'application/pdf' || name.endsWith('.pdf')) {
-    return await pdfToJpegFiles(file);
+    return await pdfToJpegFiles(file, fileIdx, fileTotal);
   }
 
   if (isHeicFile(file)) {
@@ -1878,7 +1877,7 @@ async function normalizeFileForUpload(file) {
   return [file];
 }
 
-async function pdfToJpegFiles(file) {
+async function pdfToJpegFiles(file, fileIdx = 1, fileTotal = 1) {
   if (typeof pdfjsLib === 'undefined') {
     toast('⚠️ pdf.js 未載入，PDF 以原格式上傳');
     return [file];
@@ -1892,7 +1891,7 @@ async function pdfToJpegFiles(file) {
     const arrayBuffer = await file.arrayBuffer();
     const pdf         = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     const total       = pdf.numPages;
-    toast(`⏳ PDF ${total} 頁轉換中...`);
+    toast(`⏳ 第 ${fileIdx}/${fileTotal} 個檔案 PDF ${total} 頁轉換中...`);
 
     for (let p = 1; p <= total; p++) {
       const page     = await pdf.getPage(p);
