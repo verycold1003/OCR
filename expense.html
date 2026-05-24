@@ -1499,8 +1499,8 @@ function buildExpSec(key, rs) {
       badges += `<span class="badge bd-purple">📎 附件三</span>`;
       if (parkR.length) badges += `<span class="badge bd-orange">📎 附件四</span>`;
     } else {
+      // 里程實報制：停車費已併入附件二，不需附件四
       badges += `<span class="badge bd-blue">📎 附件二</span>`;
-      if (parkR.length && !hasOil) badges += `<span class="badge bd-orange">📎 附件四</span>`;
     }
   }
 
@@ -1537,8 +1537,8 @@ function buildAttForms(proj, parkR, otherR, hasOil) {
     html += att3Form(proj, otherR);
     if (parkR.length) html += att4Form(proj.id, parkR);
   } else {
+    // 里程實報制：停車費已併入附件二，不需附件四
     html += att2Form(proj, otherR, parkR);
-    if (parkR.length && !hasOil) html += att4Form(proj.id, parkR);
   }
   return html;
 }
@@ -1685,11 +1685,40 @@ async function doExportAll() {
   const person = document.getElementById('exp-person').value;
   const month  = document.getElementById('exp-month').value;
   if (!person) { toast('⚠️ 請選擇申請人'); return; }
+
+  // ── 從 DOM 讀即時外勤欄位，附加到每筆 receipt ──
+  // 以專案為單位收集（同專案共用一份外勤列表）
+  const projFieldRowsMap = {};
+  Object.keys(att2Rows).forEach(pid => {
+    const rowCount = att2Rows[pid] || 0;
+    const rows = [];
+    for (let i = 0; i < rowCount; i++) {
+      const rowEl = document.getElementById(`a2r-${pid}-${i}`);
+      if (!rowEl) continue;
+      rows.push({
+        date:    document.getElementById(`a2d-${pid}-${i}`)?.value    || '',
+        reason:  document.getElementById(`a2rsn-${pid}-${i}`)?.value  || '',
+        start:   document.getElementById(`a2s-${pid}-${i}`)?.value    || '',
+        end:     document.getElementById(`a2e-${pid}-${i}`)?.value    || '',
+        km:      parseFloat(document.getElementById(`a2km-${pid}-${i}`)?.value) || 0,
+        isRound: document.getElementById(`a2rnd-${pid}-${i}`)?.classList.contains('on') ?? true,
+        rate:    parseFloat(document.getElementById('a2rate-'+pid)?.value) || getMileageRate(month),
+      });
+    }
+    if (rows.length) projFieldRowsMap[pid] = rows;
+  });
+
+  // 將外勤資料掛到對應 receipt（GAS 端用）
+  const receiptsWithFieldRows = S.receipts.map(r => ({
+    ...r,
+    liveFieldRows: r.projectId ? (projFieldRowsMap[r.projectId] || r.fieldRows || []) : [],
+  }));
+
   toast('⏳ 產生 PDF 中...');
   try {
     const res = await callGAS({
       action:'exportAll', person, month,
-      receipts: S.receipts,
+      receipts: receiptsWithFieldRows,
       projects: S.config.projects
     });
     if (res.success) {
