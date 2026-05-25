@@ -121,10 +121,17 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
 .rc-body.open{display:block}
 
 /* Export section */
-.exp-sec{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
-.exp-sec-hd{padding:12px 16px;background:var(--surface2);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.exp-sec{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px;transition:border-color .2s}
+.exp-sec.sec-selected{border-color:var(--accent)}
+.exp-sec-hd{padding:12px 16px;background:var(--surface2);display:flex;align-items:center;justify-content:space-between;user-select:none}
 .exp-sec-bd{padding:16px;display:none}
 .exp-sec-bd.open{display:block}
+.sec-ck{width:18px;height:18px;border-radius:4px;border:2px solid var(--border2);background:var(--bg);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .15s;margin-right:10px}
+.sec-ck.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.att-group-label{font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:18px 0 6px;margin-bottom:4px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+/* Sticky print bar */
+.print-bar{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:40;margin:0 -24px -24px;flex-wrap:wrap}
+.print-bar-info{font-size:12px;color:var(--muted);flex:1;white-space:nowrap}
 
 /* Attachment form */
 .att-form{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:10px}
@@ -446,6 +453,21 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
         <div id="expMain">
           <div style="text-align:center;color:var(--muted);padding:60px;font-size:13px" id="expEmpty">
             請先完成 OCR 辨識，結果將自動分群顯示於此
+          </div>
+          <!-- 全選列（有資料時顯示） -->
+          <div id="expSelBar" style="display:none;align-items:center;gap:10px;margin-bottom:12px">
+            <div class="sec-ck on" id="expSelAll" onclick="toggleAllSec()" title="全選／全不選">✓</div>
+            <span style="font-size:12px;color:var(--muted)">全選</span>
+            <span id="expSelCount" style="font-size:12px;color:var(--accent);font-weight:700"></span>
+          </div>
+          <!-- 附件區塊由 refreshExport() 填入 -->
+
+          <!-- 底部列印列 -->
+          <div class="print-bar" id="expPrintBar" style="display:none">
+            <span class="print-bar-info" id="expPrintInfo">已勾選 0 份</span>
+            <button class="btn btn-ghost" onclick="toggleAllSec()">☐ 全選／全不選</button>
+            <button class="btn btn-gold" onclick="doExportSelected()">🖨 列印勾選項目</button>
+            <button class="btn btn-primary" onclick="doExportAll()">✅ 全部匯出 PDF</button>
           </div>
         </div>
 
@@ -1456,110 +1478,331 @@ async function resolveDup(action) {
 function refreshExport() {
   updateStats();
   const main  = document.getElementById('expMain');
-  const empty = document.getElementById('expEmpty');
-  main.querySelectorAll('.exp-sec').forEach(e=>e.remove());
 
-  if (!S.receipts.length) { empty.style.display='block'; return; }
-  empty.style.display='none';
+  // 清除舊的 sec 和 group label（保留 expEmpty、expSelBar、expPrintBar）
+  main.querySelectorAll('.exp-sec, .att-group-label').forEach(e => e.remove());
 
+  if (!S.receipts.length) {
+    document.getElementById('expEmpty').style.display  = 'block';
+    document.getElementById('expSelBar').style.display = 'none';
+    document.getElementById('expPrintBar').style.display = 'none';
+    return;
+  }
+  document.getElementById('expEmpty').style.display = 'none';
+  document.getElementById('expSelBar').style.display = 'flex';
+  document.getElementById('expPrintBar').style.display = 'flex';
+
+  // ── 分群 ──────────────────────────────────────────────────
   const groups = {};
   S.receipts.forEach(r => {
-    const key = r.attribution==='project' ? 'proj:'+r.projectId
-              : r.attribution==='dept'    ? 'dept:'+r.dept
+    const key = r.attribution === 'project' ? 'proj:' + r.projectId
+              : r.attribution === 'dept'    ? 'dept:' + r.dept
               : 'other';
-    if (!groups[key]) groups[key]=[];
+    if (!groups[key]) groups[key] = [];
     groups[key].push(r);
   });
 
-  Object.entries(groups).forEach(([key,rs]) => {
-    const sec = buildExpSec(key, rs);
-    main.appendChild(sec);
-  });
-}
+  // 分為三類：里程實報制（附件二）、月定額（附件三+四）、其他
+  const att2Keys   = [];  // 非 quota 專案 + dept + other
+  const quotaProjs = [];  // quota 專案 [{key, proj, parkR, otherR}]
+  const att4Keys   = [];  // quota 停車費（從 quotaProjs 衍生，依日期排序）
 
-function buildExpSec(key, rs) {
-  const div = document.createElement('div');
-  div.className='exp-sec';
-
-  let label='', proj=null;
-  if (key.startsWith('proj:')) {
-    proj  = S.config.projects.find(p=>p.id===key.slice(5));
-    label = proj ? proj.name : '（未選專案）';
-  } else if (key.startsWith('dept:')) {
-    label = '🏢 ' + key.slice(5);
-  } else { label = '📋 其他'; }
-
-  const parkR  = rs.filter(r=>r.category==='parking');
-  const otherR = rs.filter(r=>r.category!=='parking');
-  const hasOil = otherR.some(r=>/中油|加油|fuel|oil|cpc/i.test(r.vendor+r.notes));
-
-  let badges='';
-  if (proj) {
-    if (proj.quota) {
-      badges += `<span class="badge bd-purple">📎 附件三</span>`;
-      if (parkR.length) badges += `<span class="badge bd-orange">📎 附件四</span>`;
+  Object.entries(groups).forEach(([key, rs]) => {
+    const proj = key.startsWith('proj:') ? S.config.projects.find(p => p.id === key.slice(5)) : null;
+    if (proj && proj.quota) {
+      const parkR  = rs.filter(r => r.category === 'parking')
+                       .sort((a,b) => a.date.localeCompare(b.date));
+      const otherR = rs.filter(r => r.category !== 'parking');
+      quotaProjs.push({ key, proj, parkR, otherR });
     } else {
-      // 里程實報制：停車費已併入附件二，不需附件四
-      badges += `<span class="badge bd-blue">📎 附件二</span>`;
+      att2Keys.push(key);
     }
+  });
+
+  // 月定額：依 proj.id 排序
+  quotaProjs.sort((a, b) => (a.proj.id || '').localeCompare(b.proj.id || ''));
+
+  // 附件四的停車費：每個 quota 專案各一 sec
+  quotaProjs.forEach(({ key, proj, parkR }) => {
+    if (parkR.length) att4Keys.push({ key, proj, parkR });
+  });
+
+  const printBarRef = document.getElementById('expPrintBar');
+
+  // ── 附件二群組 ────────────────────────────────────────────
+  if (att2Keys.length) {
+    const lbl = makeGroupLabel('📎 附件二 — 里程實報制（每專案一份 PDF）');
+    main.insertBefore(lbl, printBarRef);
+    att2Keys.forEach(key => {
+      const rs = groups[key];
+      const sec = buildExpSec(key, rs, 'att2');
+      main.insertBefore(sec, printBarRef);
+    });
   }
 
-  const total = rs.reduce((s,r)=>s+r.amount,0);
+  // ── 附件三（合併所有月定額） ──────────────────────────────
+  if (quotaProjs.length) {
+    const lbl = makeGroupLabel('📎 附件三 — 月定額制彙總（所有專案合併，每 16 筆一份 PDF）');
+    main.insertBefore(lbl, printBarRef);
+    const sec3 = buildExpSecAtt3(quotaProjs);
+    main.insertBefore(sec3, printBarRef);
+  }
+
+  // ── 附件四（每月定額專案停車費一份 PDF） ─────────────────
+  if (att4Keys.length) {
+    const lbl = makeGroupLabel('📎 附件四 — 停車費實報（每專案一份 PDF，依日期排序）');
+    main.insertBefore(lbl, printBarRef);
+    att4Keys.forEach(({ key, proj, parkR }) => {
+      const sec = buildExpSec('att4:' + key, parkR, 'att4', proj);
+      main.insertBefore(sec, printBarRef);
+    });
+  }
+
+  updatePrintBar();
+}
+
+function makeGroupLabel(text) {
+  const div = document.createElement('div');
+  div.className = 'att-group-label';
+  div.innerHTML = text;
+  return div;
+}
+
+// ── 通用 exp-sec（附件二 / 附件四） ─────────────────────────
+function buildExpSec(key, rs, attType, proj) {
+  const div = document.createElement('div');
+  div.className = 'exp-sec';
+  div.dataset.secKey  = key;
+  div.dataset.attType = attType;
+
+  let label = '';
+  if (!proj) {
+    if (key.startsWith('proj:') || key.startsWith('att4:proj:')) {
+      const pid = key.replace('att4:','').slice(5);
+      proj  = S.config.projects.find(p => p.id === pid);
+      label = proj ? proj.name : '（未選專案）';
+    } else if (key.startsWith('dept:')) {
+      label = '🏢 ' + key.slice(5);
+    } else { label = '📋 其他'; }
+  } else {
+    label = proj.name;
+  }
+
+  const parkR  = attType === 'att4' ? rs : rs.filter(r => r.category === 'parking');
+  const otherR = attType === 'att4' ? [] : rs.filter(r => r.category !== 'parking');
+  const hasOil = otherR.some(r => /中油|加油|fuel|oil|cpc/i.test(r.vendor + r.notes));
+  const total  = rs.reduce((s, r) => s + r.amount, 0);
+
+  const badgeMap = { att2: '<span class="badge bd-blue">📎 附件二</span>',
+                     att4: '<span class="badge bd-orange">📎 附件四</span>' };
+
+  let bodyHtml = '';
+  if (attType === 'att4') {
+    bodyHtml = att4Form(proj ? proj.id : key, rs);
+  } else if (proj) {
+    bodyHtml = att2Form(proj, otherR, parkR);
+  } else {
+    bodyHtml = simpleList(rs);
+  }
+
   div.innerHTML = `
-    <div class="exp-sec-hd" onclick="toggleExpSec(this)">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <span style="font-size:14px;font-weight:700">${label}</span>
-        ${badges}
+    <div class="exp-sec-hd">
+      <div style="display:flex;align-items:center;gap:0;flex:1;min-width:0" onclick="toggleExpSec(this.parentElement)">
+        <div class="sec-ck on" onclick="event.stopPropagation();toggleSecCk(this)" title="勾選此份 PDF">✓</div>
+        <span style="font-size:14px;font-weight:700;margin-right:8px;flex-shrink:0">${label}</span>
+        ${badgeMap[attType] || ''}
         <span class="badge bd-muted">${rs.length} 張</span>
-        <span class="mono" style="font-size:13px;color:var(--gold)">$${total.toLocaleString()}</span>
+        <span class="mono" style="font-size:13px;color:var(--gold);margin-left:6px">$${total.toLocaleString()}</span>
       </div>
-      <span id="exp-chev-${key}" style="color:var(--muted)">▼</span>
+      <span style="color:var(--muted);padding-left:12px;cursor:pointer" onclick="toggleExpSec(this.parentElement)">▼</span>
     </div>
-    <div class="exp-sec-bd" id="expbd-${CSS.escape(key)}">
-      ${proj ? buildAttForms(proj, parkR, otherR, hasOil) : simpleList(rs)}
+    <div class="exp-sec-bd">
+      ${bodyHtml}
     </div>`;
   return div;
 }
 
+// ── 附件三專屬 sec（合併所有月定額專案） ────────────────────
+function buildExpSecAtt3(quotaProjs) {
+  const div = document.createElement('div');
+  div.className = 'exp-sec';
+  div.dataset.secKey  = 'att3:quota';
+  div.dataset.attType = 'att3';
+
+  const total    = quotaProjs.reduce((s, e) =>
+    s + [...e.parkR, ...e.otherR].reduce((a, r) => a + r.amount, 0), 0);
+  const projNames = quotaProjs.map(e => e.proj.name).join('、');
+  const pages    = Math.ceil(quotaProjs.length / 16) || 1;
+  const pageNote = pages > 1 ? `<span class="badge bd-muted">${pages} 份 PDF</span>` : '';
+
+  let bodyHtml = '';
+  // 每個月定額專案的 otherR 顯示附件三 form（統一一個表單）
+  const allOtherRs = quotaProjs.flatMap(e => e.otherR);
+  bodyHtml += att3Form_multi(quotaProjs);
+
+  div.innerHTML = `
+    <div class="exp-sec-hd">
+      <div style="display:flex;align-items:center;gap:0;flex:1;min-width:0" onclick="toggleExpSec(this.parentElement)">
+        <div class="sec-ck on" onclick="event.stopPropagation();toggleSecCk(this)" title="勾選此份 PDF">✓</div>
+        <span style="font-size:14px;font-weight:700;margin-right:8px;flex-shrink:0">月定額彙總</span>
+        <span class="badge bd-purple">📎 附件三</span>
+        <span class="badge bd-muted">${quotaProjs.length} 專案</span>
+        ${pageNote}
+        <span class="mono" style="font-size:13px;color:var(--gold);margin-left:6px">$${total.toLocaleString()}</span>
+      </div>
+      <span style="color:var(--muted);padding-left:12px;cursor:pointer" onclick="toggleExpSec(this.parentElement)">▼</span>
+    </div>
+    <div class="exp-sec-bd">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.7">專案：${projNames}</div>
+      ${bodyHtml}
+    </div>`;
+  return div;
+}
+
+// ── 附件三多專案 form（逐專案列） ───────────────────────────
+function att3Form_multi(quotaProjs) {
+  const month = document.getElementById('exp-month').value || today().slice(0,7);
+  const expPerson = document.getElementById('exp-person');
+  const personName = expPerson?.options[expPerson.selectedIndex]?.text || '';
+
+  const rows = quotaProjs.map((e, i) => {
+    const n = i + 1;
+    const total   = e.otherR.reduce((s, r) => s + r.amount, 0);
+    const subsidy = e.proj.subsidy || 0;
+    const diff    = total - subsidy;
+    return `
+    <tr>
+      <td style="text-align:center;color:var(--muted);font-size:12px">${n}</td>
+      <td><input type="month" class="inp" style="padding:4px 8px;font-size:12px" value="${month}"></td>
+      <td style="font-size:13px;font-weight:600">${e.proj.name}</td>
+      <td><input type="number" class="inp" style="padding:4px 8px;font-size:12px;text-align:right" value="${subsidy}" id="a3sub-${e.proj.id}"></td>
+      <td><input type="date" class="inp" style="padding:4px 8px;font-size:12px" value="${e.proj.effectDate||''}" id="a3start-${e.proj.id}"></td>
+      <td><input type="date" class="inp" style="padding:4px 8px;font-size:12px" value="${e.proj.closeDate||''}" id="a3end-${e.proj.id}"></td>
+      <td class="mono" style="text-align:right;font-size:13px">$${total.toLocaleString()}</td>
+      <td class="mono" style="text-align:right;font-size:13px;color:${diff>=0?'var(--green)':'var(--red)'}">$${diff.toLocaleString()}</td>
+      <td><input class="inp" style="padding:4px 8px;font-size:12px" placeholder="備註"></td>
+      <td style="text-align:center"><div class="sec-ck" onclick="this.classList.toggle('on')" title="已入帳"></div></td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="att-form">
+    <div class="att-title">📎 附件三 — 私車公用補助核定彙總表（專案月定額制）</div>
+    <div class="fg2" style="margin-bottom:12px">
+      <div><label class="lbl">員工姓名</label><input class="inp" value="${personName}" placeholder="員工姓名"></div>
+      <div><label class="lbl">部門／職稱</label><input class="inp" placeholder="部門 / 職稱"></div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" style="min-width:860px;font-size:12px">
+        <thead>
+          <tr>
+            <th style="width:36px">序號</th>
+            <th style="width:120px">月份</th>
+            <th>專案代碼／名稱</th>
+            <th style="width:100px;text-align:right">核定補助(元/月)</th>
+            <th style="width:120px">生效日</th>
+            <th style="width:120px">終止日(結案)</th>
+            <th style="width:100px;text-align:right">發票金額(當月)</th>
+            <th style="width:100px;text-align:right">差額(發票-補助)</th>
+            <th>主管核准／備註</th>
+            <th style="width:52px">已入帳</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
 function simpleList(rs) {
-  return rs.map(r=>`<div class="info-row"><span>${r.vendor} · ${r.date}</span><span class="mono">$${r.amount.toLocaleString()}</span></div>`).join('');
+  return rs.map(r => `<div class="info-row"><span>${r.vendor} · ${r.date}</span><span class="mono">$${r.amount.toLocaleString()}</span></div>`).join('');
 }
 
-function toggleExpSec(hd) {
-  const bd = hd.nextElementSibling;
+function toggleExpSec(secEl) {
+  const bd = secEl.querySelector('.exp-sec-bd');
+  if (!bd) return;
   bd.classList.toggle('open');
-  hd.querySelector('span:last-child').textContent = bd.classList.contains('open') ? '▲' : '▼';
+  const chev = secEl.querySelector('.exp-sec-hd > span:last-child');
+  if (chev) chev.textContent = bd.classList.contains('open') ? '▲' : '▼';
 }
 
-function buildAttForms(proj, parkR, otherR, hasOil) {
-  let html='';
-  if (proj.quota) {
-    html += att3Form(proj, otherR);
-    if (parkR.length) html += att4Form(proj.id, parkR);
-  } else {
-    // 里程實報制：停車費已併入附件二，不需附件四
-    html += att2Form(proj, otherR, parkR);
+// ── Checkbox 控制 ────────────────────────────────────────────
+function toggleSecCk(ckEl) {
+  ckEl.classList.toggle('on');
+  ckEl.textContent = ckEl.classList.contains('on') ? '✓' : '';
+  const sec = ckEl.closest('.exp-sec');
+  if (sec) sec.classList.toggle('sec-selected', ckEl.classList.contains('on'));
+  updatePrintBar();
+}
+
+function toggleAllSec() {
+  const secs = document.querySelectorAll('.exp-sec');
+  const allOn = [...secs].every(s => s.querySelector('.sec-ck')?.classList.contains('on'));
+  secs.forEach(sec => {
+    const ck = sec.querySelector('.sec-ck');
+    if (!ck) return;
+    if (allOn) { ck.classList.remove('on'); ck.textContent = ''; sec.classList.remove('sec-selected'); }
+    else       { ck.classList.add('on');    ck.textContent = '✓'; sec.classList.add('sec-selected'); }
+  });
+  updatePrintBar();
+}
+
+function updatePrintBar() {
+  const secs    = document.querySelectorAll('.exp-sec');
+  const checked = [...secs].filter(s => s.querySelector('.sec-ck')?.classList.contains('on'));
+  const info    = document.getElementById('expPrintInfo');
+  const selCount = document.getElementById('expSelCount');
+  if (info)     info.textContent = `已勾選 ${checked.length} / ${secs.length} 份`;
+  if (selCount) selCount.textContent = checked.length ? `已勾選 ${checked.length} 份` : '';
+  // 全選 checkbox 狀態
+  const allCk = document.getElementById('expSelAll');
+  if (allCk) {
+    const allOn = secs.length > 0 && checked.length === secs.length;
+    allCk.classList.toggle('on', allOn);
+    allCk.textContent = allOn ? '✓' : '';
   }
-  return html;
 }
 
 function att3Form(proj, rs) {
   const month = document.getElementById('exp-month').value || today().slice(0,7);
+  const expPerson = document.getElementById('exp-person');
+  const personName = expPerson?.options[expPerson.selectedIndex]?.text || '';
   const total = rs.reduce((s,r)=>s+r.amount,0);
   const diff  = total - (proj.subsidy||0);
   return `<div class="att-form">
-    <div class="att-title">📎 附件三 — 專案月定額制 核定彙總表</div>
-    <div class="fg3" style="margin-bottom:12px">
-      <div><label class="lbl">年月</label><input type="month" class="inp" value="${month}"></div>
-      <div><label class="lbl">專案名稱</label><input class="inp" value="${proj.name}" readonly></div>
-      <div><label class="lbl">核定補助（元）</label><input type="number" class="inp" value="${proj.subsidy}" id="a3sub-${proj.id}" oninput="recalcAtt3('${proj.id}',${total})"></div>
+    <div class="att-title">📎 附件三 — 私車公用補助核定彙總表（專案月定額制）</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.7">
+      ※同一員工可同時有多專案，專案結案後次月停用，員工每月需檢附公司統編油品發票（總額≧當月補助總額）。<br>
+      ※交通補助(月定額)依核定表併薪發放。<br>
+      ※申請/憑證期限依財會公告之每月結帳截止日辦理。
     </div>
-    <div style="margin-bottom:8px;font-size:12px;color:var(--muted)">費用憑證明細：</div>
+    <div class="fg3" style="margin-bottom:10px">
+      <div><label class="lbl">月份</label><input type="month" class="inp" id="a3month-${proj.id}" value="${month}"></div>
+      <div><label class="lbl">員工姓名</label><input class="inp" id="a3name-${proj.id}" value="${personName}" placeholder="員工姓名"></div>
+      <div><label class="lbl">部門／職稱</label><input class="inp" id="a3dept-${proj.id}" placeholder="部門 / 職稱"></div>
+    </div>
+    <div class="fg3" style="margin-bottom:10px">
+      <div><label class="lbl">專案代碼／名稱</label><input class="inp" id="a3proj-${proj.id}" value="${proj.name}" placeholder="專案代碼 / 名稱"></div>
+      <div><label class="lbl">核定補助（元／月）</label><input type="number" class="inp" value="${proj.subsidy}" id="a3sub-${proj.id}" oninput="recalcAtt3('${proj.id}',${total})"></div>
+      <div class="fg2" style="gap:8px">
+        <div><label class="lbl">生效日</label><input type="date" class="inp" id="a3start-${proj.id}"></div>
+        <div><label class="lbl">終止日（結案）</label><input type="date" class="inp" id="a3end-${proj.id}"></div>
+      </div>
+    </div>
+    <div style="margin-bottom:8px;font-size:12px;color:var(--muted);font-weight:600">費用憑證明細（當月）：</div>
     ${rs.map(r=>`<div class="info-row"><span>${r.vendor} · ${r.invoiceNo||'—'} · ${r.date}</span><span class="mono">$${r.amount.toLocaleString()}</span></div>`).join('')}
     <div class="calc-box" id="a3calc-${proj.id}">
-      <div class="calc-row"><span>發票金額合計</span><span class="mono" id="a3inv-${proj.id}">$${total.toLocaleString()}</span></div>
+      <div class="calc-row"><span>發票金額合計（當月）</span><span class="mono" id="a3inv-${proj.id}">$${total.toLocaleString()}</span></div>
       <div class="calc-row"><span>核定補助</span><span class="mono" id="a3sval-${proj.id}">－$${(proj.subsidy||0).toLocaleString()}</span></div>
-      <div class="calc-row calc-tot"><span>差額（申請補助）</span><span class="mono" id="a3diff-${proj.id}">$${diff.toLocaleString()}</span></div>
+      <div class="calc-row calc-tot"><span>差額（發票 − 補助）</span><span class="mono" id="a3diff-${proj.id}" style="color:${diff>=0?'var(--green)':'var(--red)'}">$${diff.toLocaleString()}</span></div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="fg2">
+        <div><label class="lbl">主管核准／備註</label><input class="inp" id="a3remark-${proj.id}" placeholder="主管核准意見或備註"></div>
+        <div style="display:flex;align-items:flex-end;gap:8px;padding-bottom:1px">
+          <label class="lbl" style="margin:0;white-space:nowrap">已入帳</label>
+          <div class="chkbox" id="a3ck-${proj.id}" onclick="this.classList.toggle('on')" title="已入帳確認"></div>
+        </div>
+      </div>
     </div>
   </div>`;
 }
@@ -1587,12 +1830,33 @@ function att2Form(proj, otherR, parkR) {
   })();
   if (savedRows.length > 1) att2Rows[proj.id] = savedRows.length;
 
+  const expPerson = document.getElementById('exp-person');
+  const personName = expPerson?.options[expPerson.selectedIndex]?.text || '';
+  const month2 = document.getElementById('exp-month').value || today().slice(0,7);
+
   return `<div class="att-form">
-    <div class="att-title">📎 附件二 — 里程實報制</div>
-    <div class="fg2" style="margin-bottom:12px">
-      <div><label class="lbl">專案名稱</label><input class="inp" value="${proj.name}" readonly></div>
+    <div class="att-title">📎 附件二 — 私車公用補助申請單（里程實報制）</div>
+    <div class="fg4" style="margin-bottom:10px">
+      <div><label class="lbl">申請人</label><input class="inp" id="a2name-${proj.id}" value="${personName}" placeholder="申請人姓名"></div>
+      <div><label class="lbl">部門</label><input class="inp" id="a2deptname-${proj.id}" placeholder="部門"></div>
+      <div><label class="lbl">職稱</label><input class="inp" id="a2title-${proj.id}" placeholder="職稱"></div>
+      <div><label class="lbl">申請月份</label><input type="month" class="inp" id="a2month-${proj.id}" value="${month2}"></div>
+    </div>
+    <div class="fg3" style="margin-bottom:10px">
+      <div><label class="lbl">專案名稱／編號</label><input class="inp" id="a2projname-${proj.id}" value="${proj.name}" placeholder="專案名稱或編號"></div>
       <div><label class="lbl">補助標準（元/公里）</label>
         <input type="number" class="inp" id="a2rate-${proj.id}" value="${rate}" oninput="calcAtt2('${proj.id}',${parkTotal})">
+      </div>
+      <div>
+        <label class="lbl">歸屬類型</label>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:4px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+            <input type="radio" name="a2attr-${proj.id}" value="project" checked style="accent-color:var(--accent)"> 專案成本
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+            <input type="radio" name="a2attr-${proj.id}" value="dept" style="accent-color:var(--accent)"> 部門成本
+          </label>
+        </div>
       </div>
     </div>
     <div id="a2rows-${proj.id}">${
@@ -1607,6 +1871,40 @@ function att2Form(proj, otherR, parkR) {
       <div class="calc-row"><span>里程補助小計</span><span class="mono" id="a2sub-${proj.id}">$0</span></div>
       <div class="calc-row"><span>停車費合計</span><span class="mono">$${parkTotal.toLocaleString()}</span></div>
       <div class="calc-row calc-tot"><span>合計申請金額</span><span class="mono" id="a2tot-${proj.id}">$${parkTotal.toLocaleString()}</span></div>
+    </div>
+
+    <div style="margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">檢附文件：</div>
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <div class="chkbox on" onclick="this.classList.toggle('on')"></div>發票（公司統編）
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <div class="chkbox" onclick="this.classList.toggle('on')"></div>停車費憑證（如有）
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <div class="chkbox on" onclick="this.classList.toggle('on')"></div>Google 路線截圖（或路線連結）
+        </label>
+      </div>
+    </div>
+
+    <div class="fg4" style="margin-top:12px">
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px">申請人</div>
+        <input class="inp" style="padding:4px 8px;font-size:12px" placeholder="簽名">
+      </div>
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px">部門主管</div>
+        <input class="inp" style="padding:4px 8px;font-size:12px" placeholder="簽名">
+      </div>
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px">會計</div>
+        <input class="inp" style="padding:4px 8px;font-size:12px" placeholder="簽名">
+      </div>
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px">出納／人資</div>
+        <input class="inp" style="padding:4px 8px;font-size:12px" placeholder="簽名">
+      </div>
     </div>
   </div>`;
 }
@@ -1654,40 +1952,149 @@ function setRound(btn, pid, i, isRound) {
 }
 
 function att4Form(pid, rs) {
-  return `<div class="att-form" style="margin-top:10px">
-    <div class="att-title">📎 附件四 — 停車費補助申請單</div>
-    ${rs.map((r,i) => `
-    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
-      <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:8px">第 ${i+1} 筆</div>
-      <div class="fg3" style="margin-bottom:8px">
-        <div><label class="lbl">停車日期</label><input type="date" class="inp" value="${r.date}"></div>
-        <div><label class="lbl">廠商</label><input class="inp" value="${r.vendor}"></div>
-        <div><label class="lbl">事由</label><input class="inp" placeholder="停車事由"></div>
-      </div>
-      <div class="fg3">
-        <div><label class="lbl">憑證類型</label>
-          <select class="inp"><option>電子發票</option><option>統一發票</option><option>收據</option><option>停車收費單</option></select>
+  const month = document.getElementById('exp-month').value || today().slice(0,7);
+  const expPerson = document.getElementById('exp-person');
+  const personName = expPerson?.options[expPerson.selectedIndex]?.text || '';
+  const proj = S.config.projects.find(p => p.id === pid) || {};
+  const total = rs.reduce((s,r)=>s+r.amount,0);
+
+  const rows = rs.map((r,i) => `
+    <tr>
+      <td style="text-align:center;color:var(--muted);font-size:12px">${i+1}</td>
+      <td><input type="date" class="inp" style="padding:5px 8px;font-size:12px" value="${r.date}" id="a4d-${pid}-${i}"></td>
+      <td><input class="inp" style="padding:5px 8px;font-size:12px" placeholder="停車事由（與公務關聯）" id="a4rsn-${pid}-${i}"></td>
+      <td>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select class="inp" style="padding:5px 8px;font-size:12px;flex:1" id="a4type-${pid}-${i}">
+            <option>電子發票</option><option>統一發票</option><option>收據</option><option>停車收費單</option>
+          </select>
+          <input class="inp" style="padding:5px 8px;font-size:12px;width:110px" placeholder="憑證號碼" id="a4inv-${pid}-${i}" value="${r.invoiceNo||''}">
         </div>
-        <div><label class="lbl">憑證號碼</label><input class="inp" value="${r.invoiceNo}"></div>
-        <div><label class="lbl">金額（元）</label><input type="number" class="inp" value="${r.amount}"></div>
-      </div>
-    </div>`).join('')}
-    <div class="calc-box">
-      <div class="calc-row calc-tot"><span>停車費合計</span><span class="mono">$${rs.reduce((s,r)=>s+r.amount,0).toLocaleString()}</span></div>
+      </td>
+      <td><input type="number" class="inp" style="padding:5px 8px;font-size:12px;text-align:right" value="${r.amount}" id="a4amt-${pid}-${i}"></td>
+    </tr>`).join('');
+
+  // Pad to at least 5 rows
+  const emptyCount = Math.max(0, 5 - rs.length);
+  const emptyRows = Array.from({length: emptyCount}, (_,j) => `
+    <tr>
+      <td style="text-align:center;color:var(--muted);font-size:12px">${rs.length+j+1}</td>
+      <td><input type="date" class="inp" style="padding:5px 8px;font-size:12px"></td>
+      <td><input class="inp" style="padding:5px 8px;font-size:12px" placeholder="停車事由（與公務關聯）"></td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <select class="inp" style="padding:5px 8px;font-size:12px;flex:1"><option>電子發票</option><option>統一發票</option><option>收據</option><option>停車收費單</option></select>
+          <input class="inp" style="padding:5px 8px;font-size:12px;width:110px" placeholder="憑證號碼">
+        </div>
+      </td>
+      <td><input type="number" class="inp" style="padding:5px 8px;font-size:12px;text-align:right" placeholder="0"></td>
+    </tr>`).join('');
+
+  return `<div class="att-form" style="margin-top:10px">
+    <div class="att-title">📎 附件四 — 私車公用停車費補助申請單（停車費實報實銷）</div>
+    <div class="fg4" style="margin-bottom:12px">
+      <div><label class="lbl">申請月份</label><input type="month" class="inp" id="a4month-${pid}" value="${month}"></div>
+      <div><label class="lbl">員工姓名</label><input class="inp" id="a4name-${pid}" value="${personName}" placeholder="員工姓名"></div>
+      <div><label class="lbl">部門／職稱</label><input class="inp" id="a4dept-${pid}" placeholder="部門 / 職稱"></div>
+      <div><label class="lbl">專案代碼／名稱</label><input class="inp" id="a4proj-${pid}" value="${proj.name||''}" placeholder="專案代碼 / 名稱"></div>
     </div>
+    <div class="fg2" style="margin-bottom:12px;align-items:center">
+      <div>
+        <label class="lbl">成本歸屬（專案）</label>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer">
+            <input type="radio" name="a4attr-${pid}" value="yes" checked style="accent-color:var(--accent)"> 是（歸屬專案）
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer">
+            <input type="radio" name="a4attr-${pid}" value="no" style="accent-color:var(--accent)"> 否（歸屬負責部門）
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">停車費明細（請逐筆填寫；同月可多筆）：</div>
+    <div style="overflow-x:auto">
+      <table class="tbl" style="min-width:680px">
+        <thead>
+          <tr>
+            <th style="width:36px">序號</th>
+            <th style="width:140px">停車日期</th>
+            <th>停車事由（與公務關聯）</th>
+            <th style="width:220px">憑證類型 / 號碼</th>
+            <th style="width:100px;text-align:right">金額（元）</th>
+          </tr>
+        </thead>
+        <tbody>${rows}${emptyRows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3"></td>
+            <td style="font-weight:700;font-size:13px;padding:10px 12px">合計</td>
+            <td style="text-align:right;font-weight:700;color:var(--gold)" class="mono">$${total.toLocaleString()}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div style="margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2)">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">檢附文件：</div>
+      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <div class="chkbox on" onclick="this.classList.toggle('on')"></div>
+          停車費發票／收據（須為合法憑證並開立公司統一編號）
+        </label>
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px">
+          <div class="chkbox" onclick="this.classList.toggle('on')"></div>
+          <span>其他：</span><input class="inp" style="width:160px;padding:4px 8px;font-size:12px" placeholder="說明">
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(79,142,247,.05);border:1px solid rgba(79,142,247,.15);border-radius:8px;font-size:11px;color:var(--muted);line-height:1.7">
+      <strong style="color:var(--text)">申請人聲明：</strong>本人確認上述停車費均為執行公司專案公務所生，未重複請領，且已檢附合法憑證，如有不實，願負相關責任並同意公司追回款項。
+    </div>
+
+    <div class="fg3" style="margin-top:12px">
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">申請人</div>
+        <input class="inp" style="padding:5px 8px;font-size:12px;margin-bottom:6px" placeholder="簽名">
+        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;color:var(--muted)">日期</span><input type="date" class="inp" style="padding:4px 8px;font-size:12px"></div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">部門主管核准</div>
+        <input class="inp" style="padding:5px 8px;font-size:12px;margin-bottom:6px" placeholder="簽名">
+        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;color:var(--muted)">日期</span><input type="date" class="inp" style="padding:4px 8px;font-size:12px"></div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">財會審核／核銷</div>
+        <input class="inp" style="padding:5px 8px;font-size:12px;margin-bottom:6px" placeholder="簽名">
+        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;color:var(--muted)">日期</span><input type="date" class="inp" style="padding:4px 8px;font-size:12px"></div>
+      </div>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--muted)">備註：本表適用「專案月定額制」或「里程實報制」之停車費實報實銷，申請/憑證期限依財會公告之每月結帳截止日辦理。</div>
   </div>`;
 }
 
 // ════════════════════════════════════════════════════════════
 // EXPORT ACTION
 // ════════════════════════════════════════════════════════════
+// 只匯出勾選的 sec
+async function doExportSelected() {
+  const selected = [...document.querySelectorAll('.exp-sec')]
+    .filter(s => s.querySelector('.sec-ck')?.classList.contains('on'));
+  if (!selected.length) { toast('⚠️ 請先勾選要列印的項目'); return; }
+  await _doExport(selected.map(s => s.dataset.secKey));
+}
+
 async function doExportAll() {
+  await _doExport(null); // null = 全部
+}
+
+async function _doExport(secKeys) {
   const person = document.getElementById('exp-person').value;
   const month  = document.getElementById('exp-month').value;
   if (!person) { toast('⚠️ 請選擇申請人'); return; }
 
-  // ── 從 DOM 讀即時外勤欄位，附加到每筆 receipt ──
-  // 以專案為單位收集（同專案共用一份外勤列表）
+  // ── 從 DOM 讀即時外勤欄位 ───────────────────────────────
   const projFieldRowsMap = {};
   Object.keys(att2Rows).forEach(pid => {
     const rowCount = att2Rows[pid] || 0;
@@ -1708,24 +2115,58 @@ async function doExportAll() {
     if (rows.length) projFieldRowsMap[pid] = rows;
   });
 
-  // 將外勤資料掛到對應 receipt（GAS 端用）
   const receiptsWithFieldRows = S.receipts.map(r => ({
     ...r,
     liveFieldRows: r.projectId ? (projFieldRowsMap[r.projectId] || r.fieldRows || []) : [],
   }));
 
-  toast('⏳ 產生 PDF 中...');
+  // ── 過濾：若有指定 secKeys，只傳對應的 receipts ─────────
+  let receiptsToExport = receiptsWithFieldRows;
+  let filterKeys = secKeys;
+
+  if (filterKeys) {
+    // 解析 secKeys 決定要包含哪些 receipts
+    const att2ProjIds = new Set();
+    const att4ProjIds = new Set();
+    let   includeAtt3 = false;
+
+    filterKeys.forEach(k => {
+      if (k === 'att3:quota') { includeAtt3 = true; return; }
+      if (k.startsWith('att4:proj:')) { att4ProjIds.add(k.slice('att4:proj:'.length)); return; }
+      if (k.startsWith('proj:')) { att2ProjIds.add(k.slice(5)); return; }
+      // dept / other 也加入附件二
+      att2ProjIds.add('__' + k); // 特殊標記
+    });
+
+    receiptsToExport = receiptsWithFieldRows.filter(r => {
+      const proj = r.projectId ? S.config.projects.find(p => p.id === r.projectId) : null;
+      if (proj && proj.quota) {
+        // 月定額
+        if (r.category === 'parking') return att4ProjIds.has(r.projectId);
+        return includeAtt3;
+      }
+      // 里程實報 / 部門 / 其他
+      const key = r.attribution === 'project' ? r.projectId
+                : r.attribution === 'dept'    ? '__dept:' + r.dept
+                : '__other';
+      return att2ProjIds.has(key) || att2ProjIds.has('__dept:' + r.dept) || att2ProjIds.has('__other');
+    });
+
+    if (!receiptsToExport.length) { toast('⚠️ 無可匯出的憑證'); return; }
+  }
+
+  toast(`⏳ 產生 PDF 中（${receiptsToExport.length} 筆）...`);
   try {
     const res = await callGAS({
       action:'exportAll', person, month,
-      receipts: receiptsWithFieldRows,
+      receipts: receiptsToExport,
       projects: S.config.projects
     });
     if (res.success) {
-      toast('✅ PDF 已產生！');
+      toast(`✅ PDF 已產生！共 ${(res.urls||[]).length} 份`);
       (res.urls||[]).forEach(u => window.open(u,'_blank'));
-    } else { toast('❌ '+res.error); }
-  } catch(e) { toast('❌ '+e.message); }
+    } else { toast('❌ ' + res.error); }
+  } catch(e) { toast('❌ ' + e.message); }
 }
 
 // ════════════════════════════════════════════════════════════
