@@ -488,7 +488,7 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
             <div class="card-hd">📤 匯出</div>
             <div class="card-bd" style="display:flex;flex-direction:column;gap:10px">
               <div class="frow"><label class="lbl">申請人確認</label>
-                <select class="inp" id="exp-person" onchange="loadDriveFiles()"><option value="">— 請選擇 —</option></select>
+                <select class="inp" id="exp-person" onchange="loadDriveFiles();loadExportHistory()"><option value="">— 請選擇 —</option></select>
               </div>
               <div class="frow"><label class="lbl">申請月份</label><input type="month" class="inp" id="exp-month" onchange="syncOcrMonth(this.value)"></div>
               <button class="btn btn-ghost btn-full" id="btnExpLoad" onclick="loadOcrResults(false, true)">📥 從 Sheet 載入</button>
@@ -2006,10 +2006,16 @@ function renderParkSelectors(pid) {
     const el = document.getElementById(`a2park-sel-${pid}-${i}`);
     if (!el) continue;
     if (!parkR.length) { el.innerHTML = ''; continue; }
-    const savedPaired = savedRows[i]?.pairedParkIdx ?? null;
-    el.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">🅿️ 此筆外勤關聯停車費（可多選）：</div>` +
+    const savedPairedArr = (() => {
+      const fr = savedRows[i];
+      if (!fr) return [];
+      if (Array.isArray(fr.pairedParkIdxArr)) return fr.pairedParkIdxArr;
+      // 向後相容：舊資料只有 pairedParkIdx（單一數字）
+      return fr.pairedParkIdx != null ? [fr.pairedParkIdx] : [];
+    })();
+    el.innerHTML = `...` +
       parkR.map((r, ri) => {
-        const isChecked = savedPaired === ri;
+        const isChecked = savedPairedArr.includes(ri);
         return `
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin-bottom:4px">
           <div class="chkbox${isChecked ? ' on' : ''}" id="a2pk-${pid}-${i}-${ri}" onclick="onParkToggle('${pid}',${i},${ri},false)"></div>
@@ -2113,76 +2119,68 @@ function att4Form(pid, rs) {
 // ════════════════════════════════════════════════════════════
 // EXPORT ACTION
 // ════════════════════════════════════════════════════════════
-// 已產生 PDF 清單 — 支援歷史紀錄 + 本次新產生合併顯示
-// S.exportHistory = [{ attachment, time, pdfUrl }, ...]（由 loadExportHistory 填入）
 // 只匯出勾選的 sec
+// 載入此人此月份的歷史匯出紀錄，進整理匯出頁時自動呼叫
+async function loadExportHistory() {
+  const person = document.getElementById('exp-person')?.value || '';
+  const month  = document.getElementById('exp-month')?.value  || '';
+  // 人或月份未選時不顯示（避免撈出全部）
+  if (!person || !month) return;
+  try {
+    const res = await callGAS({ action: 'getHistory', person, month });
+    const rows = res.rows || [];
+    if (!rows.length) return; // 無歷史，不顯示卡片
+    _renderPdfTable(rows.map(r => ({
+      label:  r.attachment || r.project,
+      url:    r.pdfUrl,
+      timeD:  r.time ? r.time.slice(0, 10) : '',
+      timeH:  r.time ? r.time.slice(11, 16) : '',
+      isHist: true,
+    })), false /*noScroll*/);
+  } catch(e) { /* 靜默失敗 */ }
+}
+
+// 本次匯出完成後呼叫
 function renderPdfResultList(urls, labels) {
+  const _now = new Date();
+  const dateStr = _now.toLocaleDateString('zh-TW');
+  const timeStr = _now.toLocaleTimeString('zh-TW', { hour12: false });
+  const items = urls.map((url, i) => ({
+    label:  (labels && labels[i]) ? labels[i] : `PDF ${i + 1}`,
+    url,
+    timeD:  dateStr,
+    timeH:  timeStr,
+    isHist: false,
+  }));
+  _renderPdfTable(items, true /*scroll*/);
+}
+
+// 共用渲染：items = [{label, url, timeD, timeH, isHist}]
+function _renderPdfTable(items, scroll) {
   const card = document.getElementById('pdfResultCard');
   const cnt  = document.getElementById('pdfResultCnt');
   const tbl  = document.getElementById('pdfResultTbl');
   if (!card || !tbl) return;
 
-  // ── 本次新產生（urls 有值時）─────────────────────────────
-  if (urls && urls.length) {
-    const _now = new Date();
-    const exportDate = _now.toLocaleDateString('zh-TW');
-    const exportHms  = _now.toLocaleTimeString('zh-TW', { hour12: false });
-    // 更新或新增到 S.exportHistory（依 label 去重，新的蓋舊的）
-    urls.forEach((u, i) => {
-      const label = (labels && labels[i]) ? labels[i] : `PDF ${i + 1}`;
-      const existing = (S.exportHistory || []).findIndex(h => h.attachment === label);
-      const entry = { attachment: label, time: `${exportDate}\n${exportHms}`, pdfUrl: u, isNew: true };
-      if (existing >= 0) S.exportHistory[existing] = entry;
-      else { S.exportHistory = S.exportHistory || []; S.exportHistory.unshift(entry); }
-    });
-  }
-
-  const history = S.exportHistory || [];
-  if (!history.length) { card.style.display = 'none'; return; }
-
-  const rowsHtml = history.map(h => {
-    const [datePart, timePart] = (h.time || '').split('\n');
-    const timeHtml = timePart
-      ? `${datePart}<br>${timePart}`
-      : (h.time || '').replace(' ', '<br>');
-    const badge = h.isNew
-      ? `<span style="font-size:9px;background:var(--green);color:#fff;border-radius:4px;padding:1px 5px;margin-left:6px">NEW</span>`
-      : '';
-    return `<tr>
-      <td style="font-size:12px;padding:8px 14px">${h.attachment}${badge}</td>
-      <td style="padding:8px 14px;font-size:11px;color:var(--muted);line-height:1.6">${exportDate}<br>${exportHms}</td>
-      <td style="padding:8px 14px">
-        <a href="${h.pdfUrl}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">開啟↗</a>
+  const rows = items.map(it => {
+    const badge = it.isHist
+      ? `<span style="font-size:10px;background:var(--muted);color:#fff;border-radius:3px;padding:1px 5px;margin-left:6px;opacity:.7">歷史</span>`
+      : `<span style="font-size:10px;background:var(--green,#4caf50);color:#fff;border-radius:3px;padding:1px 5px;margin-left:6px">新產生</span>`;
+    return `<tr style="${it.isHist ? 'opacity:.82' : ''}">
+      <td style="font-size:13px;padding:10px 14px">${it.label}${badge}</td>
+      <td style="padding:10px 14px;font-size:11px;color:var(--muted);line-height:1.6">${it.timeD}<br>${it.timeH}</td>
+      <td style="padding:10px 14px">
+        <a href="${it.url}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">開啟↗</a>
       </td>
     </tr>`;
   }).join('');
 
   tbl.innerHTML = `<thead><tr>
-    <th>附件</th><th>匯出時間</th><th></th>
-  </tr></thead>` + rowsHtml;
-  cnt.textContent = `共 ${history.length} 份`;
+    <th>檔案</th><th>匯出時間</th><th></th>
+  </tr></thead>` + (rows || '<tr><td colspan="3" style="color:var(--muted);padding:14px">無結果</td></tr>');
+  cnt.textContent = `共 ${items.length} 份`;
   card.style.display = 'block';
-  if (urls && urls.length) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-// 從 Sheet 載入此人此月的歷史紀錄，填入 S.exportHistory 並顯示卡片
-async function loadExportHistory() {
-  const person = document.getElementById('exp-person')?.value || '';
-  const month  = document.getElementById('exp-month')?.value  || '';
-  S.exportHistory = [];
-  if (!person || !month) { renderPdfResultList(); return; }
-  try {
-    const res = await callGAS({ action: 'getHistory', person, month });
-    if (res.success && res.rows && res.rows.length) {
-      S.exportHistory = res.rows.map(r => ({
-        attachment: r.attachment || r.project || '',
-        time:       r.time || '',
-        pdfUrl:     r.pdfUrl || '',
-        isNew:      false,
-      }));
-    }
-  } catch(e) { /* 靜默失敗 */ }
-  renderPdfResultList();
+  if (scroll) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 async function doExportSelected() {
@@ -2226,6 +2224,13 @@ async function _doExport(secKeys) {
           return parkR_all
             .map((_, ri) => ri)
             .filter(ri => document.getElementById(`a2pk-${pid}-${i}-${ri}`)?.classList.contains('on'));
+        })(),
+        pairedParkIdx: (() => {  // 向後相容
+          const parkR_all = S.receipts.filter(x => x.category === 'parking' && x.projectId === pid);
+          const idx = parkR_all.findIndex((_, ri) =>
+            document.getElementById(`a2pk-${pid}-${i}-${ri}`)?.classList.contains('on')
+          );
+          return idx >= 0 ? idx : null;
         })(),
       });
     }
@@ -2329,6 +2334,7 @@ function nav(name) {
   if (name==='export') {
     if (S.receipts.length === 0) loadOcrResults(true, true);
     else refreshExport();
+    loadExportHistory(); // 進頁時顯示已有的匯出紀錄
   }
   if (name==='ocr') {
     if (S.receipts.length === 0) {
@@ -2455,9 +2461,9 @@ async function doStashAll() {
       // 讀取此外勤行勾選的停車費索引（單選，最多一個）
       const parkR_all = S.receipts.filter(x => x.category === 'parking' &&
         (r.projectId ? x.projectId === r.projectId : (x.dept === r.dept && x.attribution === r.attribution)));
-      const pairedParkIdx = parkR_all.findIndex((_, ri) =>
-        document.getElementById(`a2pk-${pid}-${i}-${ri}`)?.classList.contains('on')
-      );
+      const pairedParkIdxArr = parkR_all
+        .map((_, ri) => ri)
+        .filter(ri => document.getElementById(`a2pk-${pid}-${i}-${ri}`)?.classList.contains('on'));
       fieldRows.push({
         date:    document.getElementById(`a2d-${pid}-${i}`)?.value    || '',
         reason:  document.getElementById(`a2rsn-${pid}-${i}`)?.value  || '',
@@ -2467,7 +2473,8 @@ async function doStashAll() {
         isRound: document.getElementById(`a2rnd-${pid}-${i}`)?.classList.contains('on') ?? true,
         mapUrl:  document.getElementById(`a2map-url-${pid}-${i}`)?.value || '',
         remark:  document.getElementById(`a2rem-${pid}-${i}`)?.value || '',
-        pairedParkIdx: pairedParkIdx >= 0 ? pairedParkIdx : null,
+        pairedParkIdxArr,          // 陣列，可能是 [] / [0] / [1,2]
+        pairedParkIdx: pairedParkIdxArr[0] ?? null,  // 向後相容舊版 GAS
       });
     }
 
@@ -2612,7 +2619,8 @@ async function loadOcrResults(auto = false, fromExport = false) {
 function syncOcrMonth(val) {
   const el = document.getElementById('ocr-month');
   if (el && val) el.value = val;
-  loadDriveFiles(); // 月份變更時重新載入雲端憑證清單
+  loadDriveFiles();    // 月份變更時重新載入雲端憑證清單
+  loadExportHistory(); // 月份變更時重新載入匯出歷史
 }
 
 // ════════════════════════════════════════════════════════════
