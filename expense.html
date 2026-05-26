@@ -923,12 +923,16 @@ function renderUploadedList(files) {
 // DRIVE FILES
 // ════════════════════════════════════════════════════════════
 async function loadDriveFiles() {
+  toast('⏳ 載入雲端憑證中…');
   try {
     const person = document.getElementById('exp-person')?.value || '';
     const month  = document.getElementById('exp-month')?.value  || '';
     const res = await callGAS({ action:'listFiles', person, month });
     S.driveFiles = res.files || [];
-  } catch { }
+    toast(S.driveFiles.length ? `📂 找到 ${S.driveFiles.length} 個檔案` : '📂 此月份無憑證紀錄');
+  } catch {
+    toast('❌ 載入失敗，請重試');
+  }
   renderDriveFiles();
 }
 
