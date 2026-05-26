@@ -1726,6 +1726,16 @@ function buildExpSec(key, rs, attType, proj) {
     <div class="exp-sec-bd">
       ${bodyHtml}
     </div>`;
+  // Trigger park selectors rendering after DOM insertion
+  if (attType === 'att2') {
+    if (proj) {
+      setTimeout(()=>renderParkSelectors(proj.id), 0);
+    } else {
+      const _pid = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const _parkData = att2ParkData[_pid] || [];
+      setTimeout(()=>renderParkSelectors2(_pid, _parkData), 0);
+    }
+  }
   return div;
 }
 
@@ -1854,11 +1864,12 @@ function att2FormNoProj(key, rs) {
   // 記錄 key→pid 的對應，供附件四 buildExpSec 時使用
   att2PidMap[key] = pid;
 
+  // Store parkR for later rendering (called by buildExpSec after DOM insertion)
+  att2ParkData[pid] = parkR.map(r=>({id:r.id,vendor:r.vendor,date:r.date,amount:r.amount}));
   return `<div class="att-form">
     <div class="att-title">📎 附件二 — 外勤記錄與停車費配對</div>
     <div id="a2rows-${pid}">${a2RowHTML(pid, 0)}</div>
     <button class="btn btn-ghost btn-sm" onclick="addA2Row('${pid}')" style="margin-top:4px;margin-bottom:4px">＋ 新增外勤記錄</button>
-    <script>setTimeout(()=>renderParkSelectors2('${pid}',${JSON.stringify(parkR.map(r=>({id:r.id,vendor:r.vendor,date:r.date,amount:r.amount})))}),0);</script>
   </div>`;
 }
 
@@ -1961,8 +1972,9 @@ function recalcAtt3(pid, invTotal) {
   se('a3diff-'+pid, '$'+diff.toLocaleString());
 }
 
-const att2Rows  = {};
-const att2PidMap = {};  // key → sanitized pid，供附件四查詢
+const att2Rows    = {};
+const att2PidMap  = {};  // key → sanitized pid，供附件四查詢
+const att2ParkData = {}; // pid → parkR array for renderParkSelectors2  // key → sanitized pid，供附件四查詢
 
 function att2Form(proj, otherR, parkR) {
   att2Rows[proj.id] = 1;
@@ -1984,7 +1996,6 @@ function att2Form(proj, otherR, parkR) {
         : a2RowHTML(proj.id, 0)
     }</div>
     <button class="btn btn-ghost btn-sm" onclick="addA2Row('${proj.id}')" style="margin-top:4px;margin-bottom:4px">＋ 新增外勤記錄</button>
-    <script>setTimeout(()=>renderParkSelectors('${proj.id}'),0);</script>
   </div>`;
 }
 
