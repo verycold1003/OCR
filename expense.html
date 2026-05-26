@@ -464,21 +464,12 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
           </div>
           <!-- 附件區塊由 refreshExport() 填入 -->
 
-          <!-- PDF 產生結果清單 -->
-          <div id="pdfResultCard" style="display:none;margin-bottom:10px">
-            <div class="card">
-              <div class="card-hd">📄 已產生 PDF <span id="pdfResultCnt" style="font-size:12px;color:var(--muted);font-weight:400"></span></div>
-              <div class="card-bd" style="padding:0">
-                <table class="tbl" id="pdfResultTbl"></table>
-              </div>
-            </div>
-          </div>
-
           <!-- 底部列印列 -->
           <div class="print-bar" id="expPrintBar" style="display:none">
             <span class="print-bar-info" id="expPrintInfo">已勾選 0 份</span>
             <button class="btn btn-ghost" onclick="toggleAllSec()">☐ 全選／全不選</button>
             <button class="btn btn-gold" onclick="doExportSelected()">🖨 列印勾選項目</button>
+            <button class="btn btn-gold" id="btnStashBar" onclick="doStashAll()">💾 暫存</button>
             <button class="btn btn-primary" onclick="doExportAll()">✅ 全部匯出 PDF</button>
           </div>
         </div>
@@ -501,8 +492,16 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
               </div>
               <div class="frow"><label class="lbl">申請月份</label><input type="month" class="inp" id="exp-month" onchange="syncOcrMonth(this.value)"></div>
               <button class="btn btn-ghost btn-full" id="btnExpLoad" onclick="loadOcrResults(false, true)">📥 從 Sheet 載入</button>
-              <button class="btn btn-gold btn-full" id="btnStash" onclick="doStashAll()">💾 暫存</button>
               <button class="btn btn-ghost btn-full" onclick="refreshExport()">🔄 重新整理分群</button>
+              <!-- PDF 產生結果清單 -->
+              <div id="pdfResultCard" style="display:none;margin-top:4px">
+                <div class="card">
+                  <div class="card-hd" style="font-size:12px">📄 已產生 PDF <span id="pdfResultCnt" style="font-size:12px;color:var(--muted);font-weight:400"></span></div>
+                  <div class="card-bd" style="padding:0">
+                    <table class="tbl" id="pdfResultTbl"></table>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1803,16 +1802,28 @@ function buildExpSecAtt3(quotaProjs) {
 function att2FormNoProj(key, rs) {
   // pid：sanitize key，與附件四共用同一個 id 命名空間
   const pid = key.replace(/[^a-zA-Z0-9_-]/g, '_');
-  att2Rows[pid] = 1;
   const parkR = rs.filter(r => r.category === 'parking');
   // 記錄 key→pid 的對應，供附件四 buildExpSec 時使用
   att2PidMap[key] = pid;
+
+  // 從同群組 receipts 裡找已存的外勤資料（含 mapUrl）
+  const savedRows = (() => {
+    for (const r of rs) {
+      if (r.fieldRows && r.fieldRows.length) return r.fieldRows;
+    }
+    return [];
+  })();
+  att2Rows[pid] = Math.max(savedRows.length, 1);
 
   // Store parkR for later rendering (called by buildExpSec after DOM insertion)
   att2ParkData[pid] = parkR.map(r=>({id:r.id,vendor:r.vendor,date:r.date,amount:r.amount}));
   return `<div class="att-form">
     <div class="att-title">📎 附件二 — 外勤記錄與停車費配對</div>
-    <div id="a2rows-${pid}">${a2RowHTML(pid, 0)}</div>
+    <div id="a2rows-${pid}">${
+      savedRows.length
+        ? savedRows.map((fr, i) => a2RowHTML(pid, i, fr)).join('')
+        : a2RowHTML(pid, 0)
+    }</div>
     <button class="btn btn-ghost btn-sm" onclick="addA2Row('${pid}')" style="margin-top:4px;margin-bottom:4px">＋ 新增外勤記錄</button>
   </div>`;
 }
@@ -2082,25 +2093,27 @@ function att4Form(pid, rs) {
 // EXPORT ACTION
 // ════════════════════════════════════════════════════════════
 // 只匯出勾選的 sec
-function renderPdfResultList(urls) {
+function renderPdfResultList(urls, labels) {
   const card = document.getElementById('pdfResultCard');
   const cnt  = document.getElementById('pdfResultCnt');
   const tbl  = document.getElementById('pdfResultTbl');
   if (!card || !tbl) return;
 
-  // 從 URL 推斷檔名（Drive URL 無法直接取檔名，用序號代替）
+  const exportTime = new Date().toLocaleString('zh-TW', { hour12: false });
   const rows = urls.map((u, i) => {
-    // 嘗試從 URL 最後一段抓 id，顯示為「PDF 1」、「PDF 2」…
-    const label = `PDF ${i + 1}`;
+    const label = (labels && labels[i]) ? labels[i] : `PDF ${i + 1}`;
     return `<tr>
       <td style="font-size:13px;padding:10px 14px">${label}</td>
+      <td style="padding:10px 14px;font-size:11px;color:var(--muted);white-space:nowrap">${exportTime}</td>
       <td style="padding:10px 14px">
         <a href="${u}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">開啟↗</a>
       </td>
     </tr>`;
   }).join('');
 
-  tbl.innerHTML = rows || '<tr><td style="color:var(--muted);padding:14px">無結果</td></tr>';
+  tbl.innerHTML = `<thead><tr>
+    <th>檔案</th><th>匯出時間</th><th></th>
+  </tr></thead>` + (rows || '<tr><td colspan="3" style="color:var(--muted);padding:14px">無結果</td></tr>');
   cnt.textContent = `共 ${urls.length} 份`;
   card.style.display = 'block';
   // 捲動到清單位置
@@ -2233,9 +2246,10 @@ async function _doExport(secKeys) {
       projects: S.config.projects
     });
     if (res.success) {
-      const urls = res.urls || [];
+      const urls   = res.urls   || [];
+      const labels = res.labels || [];
       toast(`✅ PDF 已產生！共 ${urls.length} 份`);
-      renderPdfResultList(urls);
+      renderPdfResultList(urls, labels);
     } else { toast('❌ ' + res.error); }
   } catch(e) { toast('❌ ' + e.message); }
 }
@@ -2354,15 +2368,20 @@ async function doStashAll() {
     if (!key) return null;
 
     // ── 讀取附件二外勤欄位（從 DOM 取得使用者填入值）──
-    const pid = r.projectId || '';
+    // 決定此 receipt 所屬的 pid：專案用 projectId，dept/other 用 att2PidMap 查 sanitized key
+    const att2Key = r.attribution === 'project' ? 'proj:' + (r.projectId || '')
+                  : r.attribution === 'dept'    ? 'dept:' + (r.dept || '')
+                  : 'other';
+    const pid = r.projectId || att2PidMap[att2Key] || '';
     const rowCount = att2Rows[pid] || 0;
     const fieldRows = [];
     for (let i = 0; i < rowCount; i++) {
-      // 確認此外勤行確實屬於這張 receipt 所在的專案
+      // 確認此外勤行確實屬於這張 receipt 所在的群組
       const rowEl = document.getElementById(`a2r-${pid}-${i}`);
       if (!rowEl) continue;
       // 讀取此外勤行勾選的停車費索引（單選，最多一個）
-      const parkR_all = S.receipts.filter(x => x.category === 'parking' && x.projectId === pid);
+      const parkR_all = S.receipts.filter(x => x.category === 'parking' &&
+        (r.projectId ? x.projectId === r.projectId : (x.dept === r.dept && x.attribution === r.attribution)));
       const pairedParkIdx = parkR_all.findIndex((_, ri) =>
         document.getElementById(`a2pk-${pid}-${i}-${ri}`)?.classList.contains('on')
       );
@@ -2407,10 +2426,10 @@ async function doStashAll() {
 
   if (!updates.length) { toast('⚠️ 憑證缺少辨識 Key，請先執行 OCR'); return; }
 
-  setBtnLoading('btnStash',    true,  '暫存中...');
+  setBtnLoading('btnStashBar', true,  '暫存中...');
   setBtnLoading('btnOcrStash', true,  '暫存中...');
   const res = await callGAS({ action: 'stashSelected', updates });
-  setBtnLoading('btnStash',    false, '💾 暫存');
+  setBtnLoading('btnStashBar', false, '💾 暫存');
   setBtnLoading('btnOcrStash', false, '💾 暫存');
 
   if (res.success) {
