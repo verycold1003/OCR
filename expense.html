@@ -2108,8 +2108,6 @@ function onParkToggle(pid, rowIdx, parkIdx, isAtt4) {
     // 更新附件四空白提示
     syncAtt4Empty(pid);
   }
-
-  calcAtt2(pid);
 }
 
 // 檢查附件四是否所有列都已配對，顯示提示文字
@@ -2125,7 +2123,6 @@ function syncAtt4Empty(pid) {
 function setRound(btn, pid, i, isRound) {
   document.getElementById(`a2rnd-${pid}-${i}`).classList.toggle('on', isRound);
   document.getElementById(`a2one-${pid}-${i}`).classList.toggle('on', !isRound);
-  calcAtt2(pid);
 }
 
 function att4Form(pid, rs) {
