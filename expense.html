@@ -691,8 +691,7 @@ function finishLogin(person) {
   document.getElementById('loginWrap').style.display = 'none';
   document.getElementById('appShell').style.display  = 'grid';
   renderUserBar();
-  loadConfig();
-  loadDriveFiles();
+  loadConfig(); // loadConfig 結尾會呼叫 loadDriveFiles
 }
 
 function showBindNameUI() {
@@ -764,6 +763,7 @@ async function loadConfig() {
   }
   if (S.user) renderUserBar();
   populateSelects();
+  loadDriveFiles(); // 人/月欄位填好後才載入，確保過濾正確
 }
 
 function populateSelects() {
