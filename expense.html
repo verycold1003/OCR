@@ -962,7 +962,7 @@ async function doUpload() {
         }
         done.push({
           id:       res.fileId || 'sim_' + Date.now(),
-          name:     f.name,
+          name:     `${month}_${person}_${f.name}`,  // 與 Drive 檔名一致
           size:     (f.size / 1024).toFixed(1) + ' KB',
           time:     now(),
           url:      res.fileUrl || '#',
@@ -985,10 +985,15 @@ async function doUpload() {
 }
 
 function renderUploadedList(files) {
-  // 上傳完成後顯示提示，實際清單由 loadDriveFiles → renderDriveFiles 渲染
+  // 立即顯示 uploadedCard（不等 loadDriveFiles 回來）
+  if (files.length) {
+    document.getElementById('uploadedCard').style.display = 'block';
+    document.getElementById('uploadedCnt').textContent = files.length + ' 個（本次）';
+  }
+  // 顯示提示
   const hint = document.getElementById('uploadDoneHint');
   if (hint) hint.style.display = 'flex';
-  // 將本次新上傳標記為「新產生」，供 renderDriveFiles 識別
+  // 本次上傳的完整檔名（含月份前綴，與 Drive 一致）
   S._newUploadedNames = new Set(files.map(f => f.name));
 }
 
@@ -998,13 +1003,17 @@ function renderUploadedList(files) {
 async function loadDriveFiles() {
   const person = S.user?.name || '';
   const month  = document.getElementById('global-month')?.value || '';
-  toast('⏳ 載入雲端憑證中…');
   try {
     const res = await callGAS({ action:'listFiles', person, month });
     S.driveFiles = res.files || [];
-    toast(S.driveFiles.length ? `📂 找到 ${S.driveFiles.length} 個檔案` : '📂 此月份無憑證紀錄');
   } catch {
-    toast('❌ 載入失敗，請重試');
+    toast('❌ 雲端清單載入失敗，顯示本次上傳項目');
+    // 用本次上傳資料塞進 driveFiles，讓使用者可以繼續勾選送辨識
+    if (S._newUploadedNames && S._newUploadedNames.size) {
+      S.driveFiles = [...S._newUploadedNames].map(name => ({
+        name, date: new Date().toISOString().slice(0,10), url: '#'
+      }));
+    }
   }
   renderDriveFiles();
 }
@@ -1027,9 +1036,10 @@ function renderDriveFiles() {
     </tr>`;
   }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">尚無紀錄</td></tr>';
 
-  if (S.driveFiles.length) {
+  if (sorted.length || (S._newUploadedNames && S._newUploadedNames.size)) {
     document.getElementById('uploadedCard').style.display = 'block';
-    document.getElementById('uploadedCnt').textContent = S.driveFiles.length + ' 個';
+    document.getElementById('uploadedCnt').textContent =
+      sorted.length ? sorted.length + ' 個' : S._newUploadedNames.size + ' 個（本次）';
   }
 }
 
