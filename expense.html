@@ -1338,9 +1338,433 @@ function renderOCRResults() {
   if (doneBar) doneBar.style.cssText = 'display:flex;margin-top:12px;gap:10px;flex-wrap:wrap;align-items:center';
 }
 
+// ════════════════════════════════════════════════════════════
+// OCR RESULTS RENDER  （tab：油資 / 停車費 / 其他）
+// ════════════════════════════════════════════════════════════
+let _ocrTab = 'fuel';
+
+function renderOCRResults() {
+  const c = document.getElementById('ocrResults');
+  if (!S.receipts.length) { c.innerHTML = ''; updateStats(); return; }
+
+  const sorted = [...S.receipts].sort((a, b) => {
+    if (a._isNew !== b._isNew) return a._isNew ? -1 : 1;
+    return (b.date || '').localeCompare(a.date || '');
+  });
+  const tabs = {
+    fuel:    sorted.filter(r => r.category === 'fuel'),
+    parking: sorted.filter(r => r.category === 'parking'),
+    other:   sorted.filter(r => r.category !== 'fuel' && r.category !== 'parking'),
+  };
+
+  if (!tabs[_ocrTab]?.length) {
+    _ocrTab = tabs.fuel.length ? 'fuel' : tabs.parking.length ? 'parking' : 'other';
+  }
+
+  const fuelAmt  = tabs.fuel.reduce((s, r) => s + r.amount, 0);
+  const parkAmt  = tabs.parking.reduce((s, r) => s + r.amount, 0);
+  const otherAmt = tabs.other.reduce((s, r) => s + r.amount, 0);
+
+  const tabBtn = (key, icon, label, cnt, amt) => {
+    const active = _ocrTab === key;
+    return `<button onclick="switchOcrTab('${key}')" style="
+      flex:1;padding:10px 8px;border:2px solid ${active?'var(--accent)':'var(--border)'};
+      border-radius:10px;background:${active?'rgba(37,99,235,.08)':'var(--surface)'};
+      cursor:pointer;transition:all .15s;font-family:'Noto Sans TC',sans-serif">
+      <div style="font-size:13px;font-weight:800;color:${active?'var(--accent)':'var(--muted)'}">${icon} ${label}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${cnt} 張
+        <strong style="color:${active?'var(--gold)':'var(--muted)'}">$${amt.toLocaleString()}</strong></div>
+    </button>`;
+  };
+
+  const tabHtml = `<div style="display:flex;gap:10px;margin-bottom:14px">
+    ${tabBtn('fuel','⛽','油資',tabs.fuel.length,fuelAmt)}
+    ${tabBtn('parking','🅿️','停車費',tabs.parking.length,parkAmt)}
+    ${tabBtn('other','📄','其他',tabs.other.length,otherAmt)}
+  </div>`;
+
+  let bodyHtml = '';
+  if (_ocrTab === 'fuel') {
+    bodyHtml = renderFuelTab(tabs.fuel);
+  } else {
+    const listHtml = tabs[_ocrTab].map(r => rcHTML(r)).join('');
+    bodyHtml = listHtml || `<div style="text-align:center;color:var(--muted);padding:32px">此類別無紀錄</div>`;
+  }
+
+  c.innerHTML = tabHtml + bodyHtml;
+
+  // 油資 tab：初始化專案 dropdown
+  if (_ocrTab === 'fuel') {
+    setTimeout(() => initFuelProjDropdowns(), 0);
+  }
+
+  updateStats();
+  badge('nb-ocr', S.receipts.length);
+  const doneBar = document.getElementById('ocrDoneBar');
+  if (doneBar) doneBar.style.cssText = 'display:flex;margin-top:12px;gap:10px;flex-wrap:wrap;align-items:center';
+}
+
 function switchOcrTab(tab) {
   _ocrTab = tab;
   renderOCRResults();
+}
+
+// ── 油資 tab：上方發票列表 + 下方多專案 + 差額 ──────────────
+// S._fuelProjects = [{ uid, projId, fieldRows[] }]  // 當前選擇的專案列表
+if (!window._fuelProjList) window._fuelProjList = [];
+
+function renderFuelTab(fuelReceipts) {
+  const invoiceTotal = fuelReceipts.reduce((s, r) => s + r.amount, 0);
+
+  // ── 上方：發票列表 ──────────────────────────────────────
+  const invRows = fuelReceipts.map((r, i) => {
+    const isNew  = r._isNew;
+    const newTag = isNew ? `<span style="font-size:11px;background:var(--green);color:#fff;border-radius:3px;padding:1px 5px;margin-left:4px">新產生</span>` : '';
+    const catBadge = `<span class="badge bd-blue">⛽ 油資</span>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;
+      border-bottom:1px solid var(--border);flex-wrap:wrap" id="fuel-inv-${r.id}">
+      <div class="chkbox on" id="rck-${r.id}"
+        onclick="this.classList.toggle('on');syncAllOcrChk()"
+        style="flex-shrink:0"></div>
+      <div style="flex:1;min-width:120px">
+        <div style="font-size:14px;font-weight:800">${r.vendor}${newTag}</div>
+        <div style="font-size:12px;color:var(--muted)">${r.date||''} · ${r.invoiceNo||'—'}</div>
+        <div style="margin-top:3px">${catBadge}</div>
+      </div>
+      <div class="mono" style="font-size:16px;font-weight:800;color:var(--gold)">
+        $${r.amount.toLocaleString()}
+      </div>
+      <button class="btn btn-danger btn-sm btn-icon" title="刪除"
+        onclick="delR('${r.id}')" style="padding:6px 9px">🗑</button>
+    </div>`;
+  }).join('');
+
+  // ── 下方：專案選擇列表 ──────────────────────────────────
+  const projRows = window._fuelProjList.map((fp, i) =>
+    fuelProjRowHTML(fp, i)
+  ).join('');
+
+  // ── 差額計算 ────────────────────────────────────────────
+  const applyTotal = calcFuelApplyTotal();
+  const diff = invoiceTotal - applyTotal;
+  const diffOk = diff >= 0;
+  const diffStyle = diffOk
+    ? 'color:var(--green);font-weight:800'
+    : 'color:var(--red);font-weight:800';
+  const diffMsg = diffOk
+    ? `✅ 差額 +$${diff.toLocaleString()}（舉證充分）`
+    : `⚠️ 差額 -$${Math.abs(diff).toLocaleString()}（申請超出發票，請繼續填寫）`;
+
+  return `
+    <!-- 發票列表 -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hd" style="font-size:14px;font-weight:800">
+        🧾 油資發票
+        <span class="badge bd-blue" style="margin-left:6px">${fuelReceipts.length} 張</span>
+        <span class="mono" style="margin-left:auto;color:var(--gold);font-size:15px;font-weight:800">
+          總額 $${invoiceTotal.toLocaleString()}
+        </span>
+      </div>
+      <div style="padding:0 16px">
+        ${invRows || '<div style="padding:20px;color:var(--muted);text-align:center">無油資發票</div>'}
+      </div>
+    </div>
+
+    <!-- 申請專案列表 -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hd" style="font-size:14px;font-weight:800">
+        🗂 申請專案
+        <span id="fuel-apply-total" class="mono"
+          style="margin-left:auto;font-size:15px;font-weight:800;color:var(--accent)">
+          申請總額 $${applyTotal.toLocaleString()}
+        </span>
+      </div>
+      <div id="fuel-proj-list" style="padding:0 16px">
+        ${projRows || '<div style="padding:16px;color:var(--muted);text-align:center;font-size:14px">尚未選擇任何專案，請點下方「新增專案」</div>'}
+      </div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border)">
+        <button class="btn btn-ghost btn-sm" onclick="addFuelProj()">＋ 新增專案</button>
+      </div>
+    </div>
+
+    <!-- 差額 -->
+    <div id="fuel-diff-bar" style="padding:12px 16px;border-radius:10px;margin-bottom:14px;
+      background:${diffOk?'rgba(21,128,61,.07)':'rgba(220,38,38,.07)'};
+      border:1px solid ${diffOk?'rgba(21,128,61,.2)':'rgba(220,38,38,.2)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <span style="font-size:14px;color:var(--muted)">
+          發票總額 <strong style="color:var(--text)">$${invoiceTotal.toLocaleString()}</strong>
+          &nbsp;−&nbsp;申請總額 <strong style="color:var(--text)">$${applyTotal.toLocaleString()}</strong>
+        </span>
+        <span style="${diffStyle};font-size:14px">${diffMsg}</span>
+      </div>
+    </div>`;
+}
+
+// 計算目前申請總額
+function calcFuelApplyTotal() {
+  const rate = S.config.mileageRates?.[0]?.rate || 0;
+  return window._fuelProjList.reduce((sum, fp) => {
+    const proj = S.config.projects.find(p => p.id === fp.projId);
+    if (!proj) return sum;
+    if (proj.quota) return sum + (proj.subsidy || 0);
+    // 里程實報：Σ km × rate × 係數
+    const frList = fp.fieldRows || [];
+    const mileageAmt = frList.reduce((s, fr) => {
+      const km = parseFloat(fr.km) || 0;
+      return s + Math.round(km * (fr.isRound ? 2 : 1) * rate);
+    }, 0);
+    return sum + mileageAmt;
+  }, 0);
+}
+
+// 更新差額（不整個重繪）
+function updateFuelDiff() {
+  const fuelReceipts = S.receipts.filter(r => r.category === 'fuel');
+  const invoiceTotal = fuelReceipts.reduce((s, r) => s + r.amount, 0);
+  const applyTotal   = calcFuelApplyTotal();
+  const diff         = invoiceTotal - applyTotal;
+  const diffOk       = diff >= 0;
+
+  const bar = document.getElementById('fuel-diff-bar');
+  if (bar) {
+    bar.style.background = diffOk ? 'rgba(21,128,61,.07)' : 'rgba(220,38,38,.07)';
+    bar.style.borderColor = diffOk ? 'rgba(21,128,61,.2)' : 'rgba(220,38,38,.2)';
+    const diffMsg = diffOk
+      ? `✅ 差額 +$${diff.toLocaleString()}（舉證充分）`
+      : `⚠️ 差額 -$${Math.abs(diff).toLocaleString()}（申請超出發票，請繼續填寫）`;
+    bar.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span style="font-size:14px;color:var(--muted)">
+        發票總額 <strong style="color:var(--text)">$${invoiceTotal.toLocaleString()}</strong>
+        &nbsp;−&nbsp;申請總額 <strong style="color:var(--text)">$${applyTotal.toLocaleString()}</strong>
+      </span>
+      <span style="color:${diffOk?'var(--green)':'var(--red)'};font-weight:800;font-size:14px">${diffMsg}</span>
+    </div>`;
+  }
+  const applyEl = document.getElementById('fuel-apply-total');
+  if (applyEl) applyEl.textContent = `申請總額 $${applyTotal.toLocaleString()}`;
+}
+
+// 每個專案列的 HTML
+function fuelProjRowHTML(fp, i) {
+  const proj = S.config.projects.find(p => p.id === fp.projId);
+  const label = proj ? `${proj.id} ${proj.name}` : '（未選專案）';
+  const badge = proj?.quota
+    ? `<span class="badge bd-purple">月定額 $${(proj.subsidy||0).toLocaleString()}/月</span>`
+    : `<span class="badge bd-blue">里程實報</span>`;
+
+  // 里程實報：外勤列表
+  const frRows = (fp.fieldRows || []).map((fr, fi) => `
+    <div id="fp-fr-${i}-${fi}" style="background:var(--surface2);border:1px solid var(--border);
+      border-radius:8px;padding:10px 12px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:800;color:var(--muted)">外勤 ${fi+1}</span>
+        <button class="btn btn-danger btn-sm" onclick="removeFuelFR(${i},${fi})">✕</button>
+      </div>
+      <div class="fg4" style="margin-bottom:8px">
+        <div><label class="lbl">外勤日期</label>
+          <input type="date" class="inp" id="fpd-${i}-${fi}" value="${fr.date||''}"
+            onchange="saveFuelFRs(${i})"></div>
+        <div><label class="lbl">事由</label>
+          <input class="inp" id="fprsn-${i}-${fi}" value="${esc(fr.reason||'')}"
+            placeholder="外勤事由" onchange="saveFuelFRs(${i})"></div>
+        <div><label class="lbl">來回/單程</label>
+          <div class="tgl">
+            <button class="tgl-btn ${fr.isRound!==false?'on':''}" id="fprnd-${i}-${fi}"
+              onclick="setFuelFRRound(${i},${fi},true)">來回</button>
+            <button class="tgl-btn ${fr.isRound===false?'on':''}" id="fpone-${i}-${fi}"
+              onclick="setFuelFRRound(${i},${fi},false)">單程</button>
+          </div></div>
+        <div><label class="lbl">公里數（單程）</label>
+          <input type="number" class="inp" id="fpkm-${i}-${fi}" value="${fr.km||''}"
+            readonly style="background:var(--surface);cursor:default"
+            title="填完終點後自動計算"></div>
+      </div>
+      <div class="fg2" style="margin-bottom:8px">
+        <div><label class="lbl">起點</label>
+          <input class="inp" id="fps-${i}-${fi}" value="${esc(fr.start||'新北市三重區三民街272巷13號')}"
+            onchange="saveFuelFRs(${i})"></div>
+        <div><label class="lbl">終點</label>
+          <input class="inp" id="fpe-${i}-${fi}" value="${esc(fr.end||'')}"
+            placeholder="終點地址"
+            onchange="queryFuelMaps(${i},${fi});saveFuelFRs(${i})"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="queryFuelMaps(${i},${fi})">🗺 查詢距離</button>
+        <span id="fpkm-txt-${i}-${fi}" style="font-size:13px;color:var(--muted)">
+          ${fr.km ? fr.km + ' km' : ''}
+        </span>
+      </div>
+    </div>`).join('');
+
+  const rate    = S.config.mileageRates?.[0]?.rate || 0;
+  const mileAmt = !proj?.quota ? (fp.fieldRows||[]).reduce((s,fr) => {
+    const km = parseFloat(fr.km)||0;
+    return s + Math.round(km*(fr.isRound!==false?2:1)*rate);
+  }, 0) : 0;
+  const amtDisplay = proj?.quota
+    ? `$${(proj.subsidy||0).toLocaleString()}`
+    : `$${mileAmt.toLocaleString()}（${rate} 元/km）`;
+
+  return `<div id="fuel-proj-row-${i}"
+    style="border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;
+      background:var(--surface2);flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        ${fdHTML(`fd-fuelp-${i}`, `fd-fuelp-inp-${i}`, '選擇申請專案')}
+      </div>
+      ${badge}
+      <span class="mono" style="color:var(--gold);font-weight:800">${amtDisplay}</span>
+      <button class="btn btn-danger btn-sm" onclick="removeFuelProj(${i})">✕</button>
+    </div>
+    ${!proj?.quota ? `
+    <div style="padding:12px 14px">
+      <div id="fuel-fr-list-${i}">${frRows}</div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:4px"
+        onclick="addFuelFR(${i})">＋ 新增外勤紀錄</button>
+    </div>` : ''}
+  </div>`;
+}
+
+// 新增專案到列表
+function addFuelProj() {
+  const uid = 'fp_' + Date.now();
+  window._fuelProjList.push({ uid, projId: '', fieldRows: [] });
+  const i = window._fuelProjList.length - 1;
+  const list = document.getElementById('fuel-proj-list');
+  if (list) {
+    const placeholder = list.querySelector('[style*="尚未選擇"]');
+    if (placeholder) placeholder.remove();
+    const div = document.createElement('div');
+    div.innerHTML = fuelProjRowHTML(window._fuelProjList[i], i);
+    list.appendChild(div.firstElementChild);
+    // 初始化 dropdown
+    setTimeout(() => initFuelProjDropdownAt(i), 0);
+  }
+  updateFuelDiff();
+}
+
+function removeFuelProj(i) {
+  window._fuelProjList.splice(i, 1);
+  renderOCRResults(); // 整個重繪
+}
+
+// 初始化所有 fuel proj dropdown
+function initFuelProjDropdowns() {
+  window._fuelProjList.forEach((fp, i) => initFuelProjDropdownAt(i));
+}
+
+function initFuelProjDropdownAt(i) {
+  const wrapperId = `fd-fuelp-${i}`;
+  const el = document.getElementById(wrapperId);
+  if (!el) return;
+  const myDeptCode = S.config.userDeptCode || '';
+  const items = S.config.projects.filter(p => !p.deptCode || p.deptCode === myDeptCode);
+  fdInit(wrapperId, items, proj => {
+    window._fuelProjList[i].projId = proj.id;
+    S._recentProjIds = [proj.id, ...(S._recentProjIds||[]).filter(x=>x!==proj.id)].slice(0,3);
+    // 重繪此列
+    const row = document.getElementById(`fuel-proj-row-${i}`);
+    if (row) {
+      const div = document.createElement('div');
+      div.innerHTML = fuelProjRowHTML(window._fuelProjList[i], i);
+      row.replaceWith(div.firstElementChild);
+      setTimeout(() => initFuelProjDropdownAt(i), 0);
+    }
+    updateFuelDiff();
+  }, S._recentProjIds || []);
+  // 填入已選值
+  const fp = window._fuelProjList[i];
+  if (fp.projId) {
+    const proj = S.config.projects.find(p => p.id === fp.projId);
+    const inp = document.querySelector(`#${wrapperId} .fd-input`);
+    if (inp && proj) inp.value = proj.id + ' ' + proj.name;
+  }
+}
+
+// fuel proj dropdown HTML（嵌在 fuelProjRowHTML 外面）
+// 在 fuelProjRowHTML 的 header 區塊加 fd dropdown
+// 重新改寫 fuelProjRowHTML 中的 header 加入 dropdown
+// 已在上面加入，這裡不重複，改為在 renderFuelTab 呼叫後 setTimeout 初始化
+
+// 外勤紀錄操作
+function addFuelFR(i) {
+  const fp = window._fuelProjList[i];
+  if (!fp) return;
+  fp.fieldRows = fp.fieldRows || [];
+  fp.fieldRows.push({ date:'', reason:'', start:'新北市三重區三民街272巷13號', end:'', km:'', isRound:true });
+  const list = document.getElementById(`fuel-fr-list-${i}`);
+  if (list) {
+    const fi = fp.fieldRows.length - 1;
+    const fr = fp.fieldRows[fi];
+    const div = document.createElement('div');
+    div.innerHTML = fuelProjRowHTML(fp, i).match(/<div id="fp-fr-[\s\S]*?<\/div>\s*<\/div>/g)?.[fi] || '';
+    // 直接重繪整列比較簡單
+    const row = document.getElementById(`fuel-proj-row-${i}`);
+    if (row) {
+      const newDiv = document.createElement('div');
+      newDiv.innerHTML = fuelProjRowHTML(fp, i);
+      row.replaceWith(newDiv.firstElementChild);
+      setTimeout(() => initFuelProjDropdownAt(i), 0);
+    }
+  }
+  updateFuelDiff();
+}
+
+function removeFuelFR(i, fi) {
+  const fp = window._fuelProjList[i];
+  if (!fp) return;
+  fp.fieldRows.splice(fi, 1);
+  const row = document.getElementById(`fuel-proj-row-${i}`);
+  if (row) {
+    const div = document.createElement('div');
+    div.innerHTML = fuelProjRowHTML(fp, i);
+    row.replaceWith(div.firstElementChild);
+    setTimeout(() => initFuelProjDropdownAt(i), 0);
+  }
+  updateFuelDiff();
+}
+
+function setFuelFRRound(i, fi, val) {
+  const fp = window._fuelProjList[i];
+  if (fp?.fieldRows?.[fi]) fp.fieldRows[fi].isRound = val;
+  document.getElementById(`fprnd-${i}-${fi}`)?.classList.toggle('on',  val);
+  document.getElementById(`fpone-${i}-${fi}`)?.classList.toggle('on', !val);
+  saveFuelFRs(i);
+}
+
+function saveFuelFRs(i) {
+  const fp = window._fuelProjList[i];
+  if (!fp) return;
+  const rows = fp.fieldRows || [];
+  rows.forEach((fr, fi) => {
+    fr.date   = document.getElementById(`fpd-${i}-${fi}`)?.value    || fr.date;
+    fr.reason = document.getElementById(`fprsn-${i}-${fi}`)?.value  || fr.reason;
+    fr.start  = document.getElementById(`fps-${i}-${fi}`)?.value    || fr.start;
+    fr.end    = document.getElementById(`fpe-${i}-${fi}`)?.value    || fr.end;
+    fr.km     = parseFloat(document.getElementById(`fpkm-${i}-${fi}`)?.value) || fr.km;
+    fr.isRound= document.getElementById(`fprnd-${i}-${fi}`)?.classList.contains('on') ?? fr.isRound;
+  });
+  updateFuelDiff();
+}
+
+async function queryFuelMaps(i, fi) {
+  const start = document.getElementById(`fps-${i}-${fi}`)?.value?.trim();
+  const end   = document.getElementById(`fpe-${i}-${fi}`)?.value?.trim();
+  if (!start || !end) return;
+  const txtEl = document.getElementById(`fpkm-txt-${i}-${fi}`);
+  const kmEl  = document.getElementById(`fpkm-${i}-${fi}`);
+  if (txtEl) txtEl.textContent = '查詢中...';
+  try {
+    const res = await callGAS({ action: 'getDistance', origin: start, dest: end });
+    if (!res.success) throw new Error(res.error);
+    const km = res.km;
+    if (kmEl)  kmEl.value = km;
+    if (txtEl) txtEl.textContent = `${km} km`;
+    saveFuelFRs(i);
+  } catch(e) {
+    if (txtEl) txtEl.textContent = '查詢失敗';
+  }
 }
 
 function rcHTML(r) {
@@ -2574,7 +2998,15 @@ async function _doExport(secKeys) {
 
   const mRate = getMileageRate(month);
 
-  // ── 從 DOM 讀附件二外勤（a2RowHTML 欄位）────────────────────
+  // ── 油資外勤：從 _fuelProjList 取（新版 UI）────────────────────
+  const fuelProjFieldRows = {};  // projId → fieldRows[]
+  window._fuelProjList.forEach(fp => {
+    if (fp.projId && fp.fieldRows?.length) {
+      fuelProjFieldRows[fp.projId] = fp.fieldRows.map(fr => ({ ...fr, rate: mRate }));
+    }
+  });
+
+  // ── 附件二外勤：從 att2Rows DOM 取（整理匯出頁的里程實報外勤表單）
   const projFieldRowsMap = {};
   Object.keys(att2Rows).forEach(pid => {
     const rowCount = att2Rows[pid] || 0;
@@ -2595,14 +3027,15 @@ async function _doExport(secKeys) {
     if (rows.length) projFieldRowsMap[pid] = rows;
   });
 
-  // ── 從 buildExpSecAtt4 的 input 讀停車事由 ───────────────────
-  // 附件四的每列 input 格式：id 無統一 pid 前綴，改從 receipt id 對應
-  // buildExpSecAtt4 沒有 id prefix，直接從 S.receipts 的 parkReason 取（已由 stashSingle 同步）
-
   // ── 組裝 receipts，注入外勤 ──────────────────────────────────
   const receiptsWithFieldRows = S.receipts.map(r => {
-    const pid = r.projectId || r.dept?.replace(/[^a-zA-Z0-9_-]/g,'_') || 'other';
-    const liveFieldRows = projFieldRowsMap[pid] || r.fieldRows || [];
+    let liveFieldRows = [];
+    if (r.category === 'fuel' && r.projectId) {
+      // 優先用 _fuelProjList（OCR 頁填寫），再用 att2Rows DOM（匯出頁填寫），最後用 Sheet 載入的
+      liveFieldRows = fuelProjFieldRows[r.projectId]
+        || projFieldRowsMap[r.projectId]
+        || r.fieldRows || [];
+    }
     return { ...r, liveFieldRows };
   });
 
@@ -3026,8 +3459,12 @@ async function doStashAll() {
       : r.category === 'fuel'    ? (r.projectId || '')
       : (r.dept     || '');
 
+    // 補充欄：油資存外勤JSON（從 _fuelProjList 取），停車/其他存文字補充
+    const fuelFp     = r.category === 'fuel'
+      ? window._fuelProjList.find(fp => fp.projId === r.projectId)
+      : null;
     const fieldRows  = r.category === 'fuel'
-      ? (r.fieldRows?.length ? JSON.stringify(r.fieldRows) : '')
+      ? (fuelFp?.fieldRows?.length ? JSON.stringify(fuelFp.fieldRows) : '')
       : undefined;
     const supplement = r.category !== 'fuel' ? (r.supplement || '') : undefined;
 
@@ -3147,6 +3584,25 @@ async function loadOcrResults(auto = false, fromExport = false) {
   });
 
   updateStats();
+
+  updateStats();
+
+  // 從 oil receipts 還原 _fuelProjList（依 projectId 分群）
+  const fuelRAll = S.receipts.filter(r => r.category === 'fuel');
+  const projMap = {};
+  fuelRAll.forEach(r => {
+    if (!r.projectId) return;
+    if (!projMap[r.projectId]) {
+      projMap[r.projectId] = { uid:'fp_'+r.projectId, projId:r.projectId, fieldRows:[] };
+    }
+    if (!projMap[r.projectId].fieldRows.length && r.fieldRows?.length) {
+      projMap[r.projectId].fieldRows = r.fieldRows;
+    }
+  });
+  const existIds = new Set(window._fuelProjList.map(fp => fp.projId));
+  Object.values(projMap).forEach(fp => {
+    if (!existIds.has(fp.projId)) window._fuelProjList.push(fp);
+  });
 
   if (fromExport) {
     // 整理匯出頁：直接重繪分群，不跳頁、不碰 OCR 頁的 DOM
