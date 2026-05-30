@@ -73,6 +73,20 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
 .tgl{display:flex;background:var(--bg);border:1px solid var(--border2);border-radius:8px;overflow:hidden}
 .tgl-btn{flex:1;padding:7px 4px;font-size:12px;font-weight:600;text-align:center;cursor:pointer;color:var(--muted);background:transparent;border:none;transition:all .15s;font-family:'Noto Sans TC',sans-serif}
 .tgl-btn.on{background:var(--accent);color:white}
+/* 自訂 filter dropdown */
+.fd-wrap{position:relative}
+.fd-input{width:100%;background:var(--surface);border:1.5px solid var(--border2);border-radius:7px;padding:9px 13px;color:var(--text);font-size:15px;font-family:'Noto Sans TC',sans-serif;outline:none;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.fd-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.fd-list{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1.5px solid var(--accent);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.12);z-index:500;max-height:240px;overflow-y:auto;display:none}
+.fd-list.open{display:block}
+.fd-item{padding:10px 14px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s}
+.fd-item:last-child{border-bottom:none}
+.fd-item:hover,.fd-item.focused{background:rgba(37,99,235,.08)}
+.fd-item .fd-code{font-weight:800;color:var(--accent);margin-right:6px;font-family:monospace}
+.fd-item .fd-name{color:var(--text)}
+.fd-item .fd-badge{font-size:11px;background:rgba(37,99,235,.1);color:var(--accent);border-radius:3px;padding:1px 5px;margin-left:6px}
+.fd-item .fd-recent{font-size:11px;background:rgba(21,128,61,.1);color:var(--green);border-radius:3px;padding:1px 5px;margin-left:4px}
+.fd-empty{padding:14px;font-size:13px;color:var(--muted);text-align:center}
 
 /* Badges */
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700}
@@ -610,7 +624,7 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
 // CONFIG
 // ════════════════════════════════════════════════════════════
 const CFG = {
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbxXR39PY2JplA6h5CdVDxfA9RCvk3zjQnVwijVL2w44ZQ7ZklSErjvurnUX5vs6_waZhw/exec'
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbx3cQMDpX8k_RyAdEd2X3Ro6juWzIKe-2g1XYAp-zEO9p6im-30FmpV0qpeaJHtAMJO/exec'
 };
 
 // ════════════════════════════════════════════════════════════
@@ -965,10 +979,10 @@ async function doUpload() {
         }
         done.push({
           id:       res.fileId || 'sim_' + Date.now(),
-          name:     `${month}_${person}_${f.name}`,  // 與 Drive 檔名一致
+          name:     `${month}_${person}_${f.name}`,
           size:     (f.size / 1024).toFixed(1) + ' KB',
           time:     now(),
-          url:      res.fileUrl || '#',
+          driveUrl: res.fileUrl || res.driveUrl || '#',
           mimeType: f.type,
         });
       }
@@ -1006,20 +1020,20 @@ function renderUploadedList(files) {
 async function loadDriveFiles() {
   const person = S.user?.name || '';
   const month  = document.getElementById('global-month')?.value || '';
-  // 立即顯示 loading
+
+  // 立即顯示 card + loading，不等非同步結果
+  document.getElementById('uploadedCard').style.display = 'block';
   const tbl = document.getElementById('driveFileTbl');
-  if (tbl) tbl.innerHTML = loadingRow(4);
-  if (S.driveFiles.length || (S._newUploadedNames?.size)) {
-    document.getElementById('uploadedCard').style.display = 'block';
-  }
+  if (tbl) tbl.innerHTML = loadingRow(4, '載入雲端憑證中...');
+
   try {
     const res = await callGAS({ action:'listFiles', person, month });
     S.driveFiles = res.files || [];
   } catch {
-    if (tbl) tbl.innerHTML = errorRow(4);
+    if (tbl) tbl.innerHTML = errorRow(4, '❌ 載入失敗，請點 🔄 重試');
     if (S._newUploadedNames?.size) {
       S.driveFiles = [...S._newUploadedNames].map(name => ({
-        name, date: new Date().toISOString().slice(0,10), url: '#'
+        name, date: new Date().toISOString().slice(0,10), driveUrl: '#'
       }));
       renderDriveFiles();
     }
@@ -1038,15 +1052,19 @@ function renderDriveFiles() {
     const newTag = isNew
       ? `<span style="font-size:11px;background:var(--green);color:#fff;border-radius:3px;padding:1px 6px;margin-left:6px">新產生</span>`
       : '';
+    const driveHref = f.driveUrl || f.url || '#';
     return `<tr ${isNew ? 'style="background:rgba(21,128,61,.05)"' : ''}>
       <td style="width:36px"><div class="chkbox" id="dc-${i}" onclick="toggleDriveChk(${i})"></div></td>
       <td style="font-size:14px">${f.name}${newTag}</td>
       <td style="font-size:13px;color:var(--muted);white-space:nowrap">${f.date || ''}</td>
-      <td><a href="${f.url||'#'}" target="_blank" style="color:var(--accent);font-size:13px;font-weight:700">↗</a></td>
+      <td>${driveHref !== '#'
+        ? `<a href="${driveHref}" target="_blank" style="color:var(--accent);font-size:14px;font-weight:700">↗</a>`
+        : `<span style="color:var(--border2);font-size:13px">—</span>`
+      }</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">尚無紀錄</td></tr>';
+  }).join('') || emptyRow(4, '此月份無憑證紀錄');
 
-  if (sorted.length || (S._newUploadedNames && S._newUploadedNames.size)) {
+  if (sorted.length || (S._newUploadedNames?.size)) {
     document.getElementById('uploadedCard').style.display = 'block';
     document.getElementById('uploadedCnt').textContent =
       sorted.length ? sorted.length + ' 個' : S._newUploadedNames.size + ' 個（本次）';
@@ -1247,9 +1265,18 @@ function mkReceipt(id, qf, item, idx, isNew) {
 }
 
 function detectCat(item) {
+  // 優先採信 OCR / GAS 回傳的 category 欄位
+  const raw = (item.category || '').toLowerCase().trim();
+  if (raw === 'fuel'    || raw === '油資') return 'fuel';
+  if (raw === 'parking' || raw === '停車') return 'parking';
+  if (raw === 'other'   || raw === '其他') return 'other';
+
+  // 依廠商名稱 + 備註關鍵字自動判斷
   const s = JSON.stringify(item);
-  if (/停車|parking|car park|車位|泊/i.test(s))           return 'parking';
-  if (/fuel|油資|加油|中油|台塑油|汽油|柴油/i.test(s))    return 'fuel';
+  // 停車費優先（避免停車場名稱誤判為油資）
+  if (/停車|parking|car\s*park|車位|泊車|路邊停/i.test(s)) return 'parking';
+  // 加油站常見名稱
+  if (/中油|台塑油|全國加油|速邁樂|cpc|fuel|加油|油資|汽油|柴油|台灣中油|鑫澤|佳吉|車用油/i.test(s)) return 'fuel';
   return 'other';
 }
 
@@ -1334,29 +1361,6 @@ function rcHTML(r) {
   const myDeptCode = S.config.userDeptCode || S.config.userDept || '';
   const sameDeptProjects = S.config.projects.filter(p => !p.deptCode || p.deptCode === myDeptCode);
   const recentIds = (S._recentProjIds || []).slice(0, 3);
-  const sortedProjs = [
-    ...sameDeptProjects.filter(p => recentIds.includes(p.id)),
-    ...sameDeptProjects.filter(p => !recentIds.includes(p.id)),
-  ];
-  const dlId = `dl-proj-${r.id}`;
-  const projDL = `<datalist id="${dlId}">${
-    sortedProjs.map(p => `<option value="${p.id} ${p.name}">${p.quota ? '月定額' : '里程'}</option>`).join('')
-  }</datalist>`;
-
-  // 部門 datalist
-  const deptDlId = `dl-dept-${r.id}`;
-  const deptDL = `<datalist id="${deptDlId}">${
-    (S.config.departments || []).map(d => `<option value="${d.code}">${d.name}</option>`).join('')
-  }<option value="其他">其他</option></datalist>`;
-
-  // 停車費：歸屬顯示框（datalist 選專案/部門/其他）
-  const parkAttrVal = r.parkAttr || '';
-  const parkAttrDlId = `dl-pkattr-${r.id}`;
-  const parkAttrDL = `<datalist id="${parkAttrDlId}">
-    ${sortedProjs.map(p => `<option value="${p.id} ${p.name}"></option>`).join('')}
-    ${(S.config.departments||[]).map(d=>`<option value="${d.code}"></option>`).join('')}
-    <option value="其他"></option>
-  </datalist>`;
 
   const isPark  = r.category === 'parking';
   const isFuel  = r.category === 'fuel';
@@ -1366,11 +1370,17 @@ function rcHTML(r) {
     if (!isFuel || !r.projectId) return '';
     const p = S.config.projects.find(x => x.id === r.projectId);
     if (!p) return '';
-    if (p.quota) return `<div style="font-size:13px;color:var(--green);margin-top:6px">核定補助 <strong>$${p.subsidy.toLocaleString()}</strong>/月</div>`;
-    return `<div style="font-size:13px;color:var(--accent);margin-top:6px">里程實報制</div>`;
+    if (p.quota) return `<div style="font-size:13px;color:var(--green);margin-top:4px">核定補助 <strong>$${p.subsidy.toLocaleString()}</strong>/月</div>`;
+    return `<div style="font-size:13px;color:var(--accent);margin-top:4px">里程實報制</div>`;
   })();
 
-  return `<div class="rc ${isNew?'rc-new':''}" id="rc-${r.id}" style="
+  // 其他：歸屬部門 datalist（保留原生 datalist，項目少不需要自訂）
+  const deptDlId = `dl-dept-${r.id}`;
+  const deptDL = `<datalist id="${deptDlId}">${
+    (S.config.departments || []).map(d => `<option value="${d.code}">${d.name}</option>`).join('')
+  }<option value="其他">其他</option></datalist>`;
+
+  const html = `<div class="rc ${isNew?'rc-new':''}" id="rc-${r.id}" style="
     border:1px solid var(--border);border-radius:10px;margin-bottom:10px;
     overflow:hidden;background:var(--surface);
     ${isNew?'box-shadow:0 0 0 2px rgba(21,128,61,.25)':''}">
@@ -1427,11 +1437,8 @@ function rcHTML(r) {
 
         <!-- 停車費：歸屬框 -->
         <div id="pf-park-${r.id}" style="${isPark?'':'display:none'};margin-bottom:12px">
-          <label class="lbl">停車費歸屬（專案代碼/部門代碼/其他）</label>
-          ${parkAttrDL}
-          <input class="inp" id="inp-pkattr-${r.id}" list="${parkAttrDlId}"
-            value="${esc(parkAttrVal)}" placeholder="輸入專案代碼、部門代碼或「其他」"
-            onchange="upR('${r.id}','parkAttr',this.value);stashSingle('${r.id}')">
+          <label class="lbl">停車費歸屬（專案/部門/其他）</label>
+          ${fdHTML(`fd-pkattr-${r.id}`, `fd-pkattr-inp-${r.id}`, '輸入專案代碼、部門代碼或「其他」')}
           <div style="margin-top:8px">
             <label class="lbl">停車事由（補充）</label>
             <input class="inp" id="inp-supp-park-${r.id}" value="${esc(r.supplement||'')}"
@@ -1442,14 +1449,9 @@ function rcHTML(r) {
 
         <!-- 油資：選擇專案 -->
         <div id="pf-fuel-${r.id}" style="${isFuel?'':'display:none'};margin-bottom:12px">
-          ${projDL}
           <label class="lbl">選擇專案</label>
-          <input class="inp" id="inp-fuelproj-${r.id}" list="${dlId}"
-            value="${r.projectId ? (r.projectId + ' ' + (S.config.projects.find(p=>p.id===r.projectId)?.name||'')) : ''}"
-            placeholder="輸入專案代碼或名稱篩選"
-            oninput="onFuelProjInput('${r.id}',this.value)"
-            onchange="onFuelProjInput('${r.id}',this.value)">
-          <div id="fp-extra-${r.id}">${fuelProjDisplay}</div>
+          ${fdHTML(`fd-fuelproj-${r.id}`, `fd-fuelproj-inp-${r.id}`, '輸入代碼或名稱篩選')}
+          <div id="fp-extra-${r.id}" style="margin-top:6px">${fuelProjDisplay}</div>
           <!-- 里程實報：外勤紀錄 -->
           <div id="fp-fieldrows-${r.id}" style="display:none;margin-top:10px">
             <div id="fp-fr-list-${r.id}"></div>
@@ -1481,9 +1483,189 @@ function rcHTML(r) {
       </div>
     </div>
   </div>`;
+
+  // 初始化自訂 dropdown（setTimeout 等 DOM 插入後）
+  const rid = r.id;
+  const _projItems = sameDeptProjects;
+  const _deptItems = [
+    ...(S.config.departments||[]).map(d=>({id:d.code, name:d.name})),
+    {id:'其他', name:'其他'},
+  ];
+  const _recentIds = recentIds;
+  setTimeout(() => {
+    // 油資：專案 dropdown
+    fdInit(`fd-fuelproj-${rid}`, _projItems, proj => {
+      onFuelProjSelect(rid, proj);
+    }, _recentIds);
+    // 若已有選中的專案，填入初始值
+    if (r.projectId) {
+      const selProj = S.config.projects.find(p=>p.id===r.projectId);
+      const inp = document.querySelector(`#fd-fuelproj-${rid} .fd-input`);
+      if (inp && selProj) inp.value = selProj.id + ' ' + selProj.name;
+    }
+    // 停車費：歸屬 dropdown（專案 + 部門 + 其他）
+    const pkItems = [
+      ..._projItems.map(p=>({id:p.id, name:p.name, quota:p.quota})),
+      ..._deptItems,
+    ];
+    fdInit(`fd-pkattr-${rid}`, pkItems, item => {
+      upR(rid, 'parkAttr', item.id);
+      stashSingle(rid);
+    }, _recentIds);
+    // 若已有停車費歸屬，填入初始值
+    if (r.parkAttr) {
+      const inp = document.querySelector(`#fd-pkattr-${rid} .fd-input`);
+      if (inp) {
+        const found = pkItems.find(p=>p.id===r.parkAttr);
+        inp.value = found ? r.parkAttr + ' ' + found.name : r.parkAttr;
+      }
+    }
+  }, 0);
+
+  return html;
 }
 
 function esc(s) { return String(s||'').replace(/"/g,'&quot;'); }
+
+// ════════════════════════════════════════════════════════════
+// 自訂 Filter Dropdown 元件
+// 用法：fdHTML(wrapperId, inputId, items, onSelect, opts)
+//   items: [{id, name, quota?, badge?}]
+//   onSelect: (item) => {}
+//   opts: { placeholder, recentIds, depts }
+// ════════════════════════════════════════════════════════════
+function fdHTML(wrapperId, inputId, placeholder) {
+  return `<div class="fd-wrap" id="${wrapperId}">
+    <input class="fd-input" id="${inputId}" placeholder="${placeholder}"
+      autocomplete="off"
+      oninput="fdFilter('${wrapperId}')"
+      onfocus="fdOpen('${wrapperId}')"
+      onkeydown="fdKey(event,'${wrapperId}')">
+    <div class="fd-list" id="${wrapperId}-list"></div>
+  </div>`;
+}
+
+// 初始化 dropdown 資料
+const _fdData = {};  // wrapperId → { items, onSelect, recentIds }
+
+function fdInit(wrapperId, items, onSelect, recentIds) {
+  _fdData[wrapperId] = { items: items || [], onSelect, recentIds: recentIds || [] };
+  fdRender(wrapperId, '');
+}
+
+function fdRender(wrapperId, q) {
+  const d = _fdData[wrapperId];
+  if (!d) return;
+  const list = document.getElementById(wrapperId + '-list');
+  if (!list) return;
+
+  const recentIds = d.recentIds || [];
+  const lower = q.toLowerCase();
+
+  // 過濾：代碼或名稱含搜尋字
+  let matched = d.items.filter(p =>
+    !q ||
+    (p.id   || '').toLowerCase().includes(lower) ||
+    (p.name || '').toLowerCase().includes(lower) ||
+    (p.code || '').toLowerCase().includes(lower)
+  );
+
+  if (!matched.length) {
+    list.innerHTML = `<div class="fd-empty">沒有符合的項目</div>`;
+    return;
+  }
+
+  // 最近使用的排前面
+  const recent  = matched.filter(p => recentIds.includes(p.id || p.code));
+  const others  = matched.filter(p => !recentIds.includes(p.id || p.code));
+  const sorted  = [...recent, ...others].slice(0, 30);
+
+  list.innerHTML = sorted.map((p, i) => {
+    const isRecent = recentIds.includes(p.id || p.code);
+    const badge = p.quota !== undefined
+      ? `<span class="fd-badge">${p.quota ? '月定額' : '里程'}</span>` : '';
+    const recentTag = isRecent ? `<span class="fd-recent">最近</span>` : '';
+    const displayId = p.id || p.code || '';
+    const displayName = p.name || '';
+    return `<div class="fd-item" data-idx="${i}"
+      onmousedown="fdSelect('${wrapperId}',${i})"
+      ontouchstart="fdSelect('${wrapperId}',${i})">
+      <span class="fd-code">${displayId}</span>
+      <span class="fd-name">${displayName}</span>
+      ${badge}${recentTag}
+    </div>`;
+  }).join('');
+
+  // 存 sorted 供 select 用
+  _fdData[wrapperId]._sorted = sorted;
+}
+
+function fdFilter(wrapperId) {
+  const inp = document.getElementById(wrapperId.replace('-wrap','') + '-input') ||
+              document.querySelector(`#${wrapperId} .fd-input`);
+  if (!inp) return;
+  const list = document.getElementById(wrapperId + '-list');
+  if (list) list.classList.add('open');
+  fdRender(wrapperId, inp.value);
+}
+
+function fdOpen(wrapperId) {
+  const list = document.getElementById(wrapperId + '-list');
+  if (list) { list.classList.add('open'); fdRender(wrapperId, document.querySelector(`#${wrapperId} .fd-input`)?.value || ''); }
+}
+
+function fdClose(wrapperId) {
+  const list = document.getElementById(wrapperId + '-list');
+  if (list) list.classList.remove('open');
+}
+
+function fdSelect(wrapperId, idx) {
+  const d = _fdData[wrapperId];
+  if (!d) return;
+  const item = (d._sorted || d.items)[idx];
+  if (!item) return;
+  // 填入 input
+  const inp = document.querySelector(`#${wrapperId} .fd-input`);
+  if (inp) inp.value = (item.id || item.code || '') + (item.name ? ' ' + item.name : '');
+  fdClose(wrapperId);
+  // 更新最近使用
+  const key = item.id || item.code;
+  if (key) {
+    d.recentIds = [key, ...(d.recentIds||[]).filter(x=>x!==key)].slice(0,3);
+    S._recentProjIds = d.recentIds;
+  }
+  // 回呼
+  if (d.onSelect) d.onSelect(item);
+}
+
+function fdKey(e, wrapperId) {
+  const list = document.getElementById(wrapperId + '-list');
+  if (!list) return;
+  const items = list.querySelectorAll('.fd-item');
+  let focused = list.querySelector('.fd-item.focused');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (!list.classList.contains('open')) { list.classList.add('open'); return; }
+    const next = focused ? focused.nextElementSibling : items[0];
+    if (next) { focused?.classList.remove('focused'); next.classList.add('focused'); next.scrollIntoView({block:'nearest'}); }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const prev = focused?.previousElementSibling;
+    if (prev) { focused.classList.remove('focused'); prev.classList.add('focused'); prev.scrollIntoView({block:'nearest'}); }
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (focused) { const idx = focused.dataset.idx; fdSelect(wrapperId, parseInt(idx)); }
+  } else if (e.key === 'Escape') {
+    fdClose(wrapperId);
+  }
+}
+
+// 點擊外部關閉
+document.addEventListener('click', e => {
+  document.querySelectorAll('.fd-wrap').forEach(wrap => {
+    if (!wrap.contains(e.target)) fdClose(wrap.id);
+  });
+});
 
 function upR(id, k, v) { const r = S.receipts.find(x => x.id === id); if (r) r[k] = v; }
 
@@ -1515,37 +1697,32 @@ async function stashSingle(id) {
   } catch(_) { /* 靜默 */ }
 }
 
-// 油資：datalist 選好後解析 projectId
-function onFuelProjInput(id, val) {
-  const r = S.receipts.find(x => x.id === id);
-  if (!r) return;
-  // val 格式為 "projectId name" 或僅 projectId
-  const parts = val.trim().split(/\s+/);
-  const projId = parts[0];
-  const proj   = S.config.projects.find(p => p.id === projId);
-  if (proj) {
-    upR(id, 'projectId', proj.id);
-    // 記錄最近使用
-    S._recentProjIds = [proj.id, ...(S._recentProjIds||[]).filter(x=>x!==proj.id)].slice(0,3);
-    // 顯示核定補助或里程實報
-    const extra = document.getElementById(`fp-extra-${id}`);
-    if (extra) {
-      if (proj.quota) {
-        extra.innerHTML = `<div style="font-size:13px;color:var(--green);margin-top:6px">核定補助 <strong>$${proj.subsidy.toLocaleString()}</strong>/月</div>`;
-      } else {
-        extra.innerHTML = `<div style="font-size:13px;color:var(--accent);margin-top:6px">里程實報制</div>`;
-      }
-    }
-    // 里程實報才顯示外勤紀錄區塊
-    const frDiv = document.getElementById(`fp-fieldrows-${id}`);
-    if (frDiv) frDiv.style.display = proj.quota ? 'none' : '';
-  } else {
+// 油資：dropdown 選好後觸發
+function onFuelProjSelect(id, proj) {
+  if (!proj) {
     upR(id, 'projectId', '');
     const extra = document.getElementById(`fp-extra-${id}`);
     if (extra) extra.innerHTML = '';
     const frDiv = document.getElementById(`fp-fieldrows-${id}`);
     if (frDiv) frDiv.style.display = 'none';
+    stashSingle(id);
+    return;
   }
+  upR(id, 'projectId', proj.id);
+  // 記錄最近使用
+  S._recentProjIds = [proj.id, ...(S._recentProjIds||[]).filter(x=>x!==proj.id)].slice(0,3);
+  // 顯示核定補助或里程實報
+  const extra = document.getElementById(`fp-extra-${id}`);
+  if (extra) {
+    if (proj.quota) {
+      extra.innerHTML = `<div style="font-size:13px;color:var(--green);margin-top:4px">核定補助 <strong>$${(proj.subsidy||0).toLocaleString()}</strong>/月</div>`;
+    } else {
+      extra.innerHTML = `<div style="font-size:13px;color:var(--accent);margin-top:4px">里程實報制</div>`;
+    }
+  }
+  // 里程實報才顯示外勤紀錄區塊
+  const frDiv = document.getElementById(`fp-fieldrows-${id}`);
+  if (frDiv) frDiv.style.display = proj.quota ? 'none' : '';
   stashSingle(id);
 }
 
