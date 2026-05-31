@@ -465,13 +465,17 @@ select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
         <div class="card-hd">
           📄 已產生 PDF
           <span class="badge bd-muted" id="histCnt" style="margin-left:6px"></span>
-          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="loadExportHistory(true)" title="重新從 ExportHistory 載入">🔄</button>
-          <span id="histSyncDone" style="font-size:13px;color:var(--green);font-weight:700;display:none;margin-left:6px">✅ 同步完成</span>
+          <span id="histSyncDone" style="font-size:13px;color:var(--green);font-weight:700;display:none;margin-left:auto">✅ 同步完成</span>
         </div>
         <div style="overflow-x:auto">
           <table class="tbl" id="histTbl">
             <thead><tr><th>附件</th><th>匯出時間</th><th>專案</th><th></th></tr></thead>
-            <tbody id="histTblBody"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:32px">點 🔄 載入此月紀錄</td></tr></tbody>
+            <tbody id="histTblBody"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:28px">
+              <div style="display:inline-flex;align-items:center;gap:10px;font-size:15px">
+                <div style="width:16px;height:16px;border:2.5px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:rot .7s linear infinite"></div>
+                載入中...
+              </div>
+            </td></tr></tbody>
           </table>
         </div>
       </div>
@@ -844,6 +848,7 @@ async function loadConfig() {
   if (S.user) renderUserBar();
   populateSelects();
   loadDriveFiles();
+  loadExportHistory(false); // 預載入匯出紀錄
 }
 
 function populateSelects() {
@@ -2029,15 +2034,21 @@ function upR(id, k, v) { const r = S.receipts.find(x => x.id === id); if (r) r[k
 async function stashSingle(id) {
   const r = S.receipts.find(x => x.id === id);
   if (!r) return;
+  // 油資：projId 優先從 _fuelProjList 取（新版 UI 不一定存在 r.projectId）
+  const fuelFp = r.category === 'fuel'
+    ? (window._fuelProjList.find(fp => fp.projId === r.projectId)
+       || window._fuelProjList.find(fp => fp.projId))
+    : null;
   const attribution = r.category === 'parking' ? 'parking'
     : r.category === 'fuel'    ? 'project'
     : 'dept';
   const attributionTarget = r.category === 'parking' ? (r.parkAttr || '')
-    : r.category === 'fuel'    ? (r.projectId || '')
+    : r.category === 'fuel'    ? (fuelFp?.projId || r.projectId || '')
     : (r.dept || '');
   // 補充欄：油資存外勤JSON，停車/其他存文字補充
   const fieldRows  = r.category === 'fuel'
-    ? (r.fieldRows?.length ? JSON.stringify(r.fieldRows) : '')
+    ? (fuelFp?.fieldRows?.length ? JSON.stringify(fuelFp.fieldRows)
+       : r.fieldRows?.length ? JSON.stringify(r.fieldRows) : '')
     : undefined;
   const supplement = r.category !== 'fuel' ? (r.supplement || '') : undefined;
   try {
@@ -3376,21 +3387,27 @@ async function stashThenExport() {
 async function doStashAll() {
   if (!S.receipts.length) { toast('⚠️ 沒有可暫存的憑證'); return; }
 
+  // 油資：先建立 _fuelProjList 的索引（index=0 對應第一個專案的所有 receipt）
+  // 新版 UI 下，fuel receipt 的 projectId 可能為空，需從 _fuelProjList 取
+  // 策略：所有 fuel receipts 共享 _fuelProjList[0] 的專案（若只有一個）
+  //       或依 receipt.projectId（若已有值）對應到 _fuelProjList 中的項目
+  const fuelProjForReceipt = (r) => {
+    if (r.projectId) return window._fuelProjList.find(fp => fp.projId === r.projectId);
+    // projectId 空時，取第一個有 projId 的項目（向後相容舊資料）
+    return window._fuelProjList.find(fp => fp.projId);
+  };
+
   const updates = S.receipts.map(r => {
     const key = r.ocrKey || (r.invoiceNo && r.invoiceNo.trim() ? r.invoiceNo.trim() : r.id);
     if (!key) return null;
     // 依類別決定 attribution / attributionTarget
+    const fuelFp = r.category === 'fuel' ? fuelProjForReceipt(r) : null;
     const attribution = r.category === 'parking' ? 'parking'
       : r.category === 'fuel'    ? 'project'
       : 'dept';
     const attributionTarget = r.category === 'parking' ? (r.parkAttr   || '')
-      : r.category === 'fuel'    ? (r.projectId || '')
+      : r.category === 'fuel'    ? (fuelFp?.projId || r.projectId || '')
       : (r.dept     || '');
-
-    // 補充欄：油資存外勤JSON（從 _fuelProjList 取），停車/其他存文字補充
-    const fuelFp     = r.category === 'fuel'
-      ? window._fuelProjList.find(fp => fp.projId === r.projectId)
-      : null;
     const fieldRows  = r.category === 'fuel'
       ? (fuelFp?.fieldRows?.length ? JSON.stringify(fuelFp.fieldRows) : '')
       : undefined;
